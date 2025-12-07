@@ -1,0 +1,335 @@
+local tbGui = Instance.new("ScreenGui")
+tbGui.Name = "ThongBaoGui"
+tbGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+tbGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+tbGui.ResetOnSpawn = false
+
+-- Tạo khung text chính
+local title = Instance.new("TextLabel")
+title.Parent = tbGui
+title.Size = UDim2.new(1, 0, 0.1, 0)
+title.Position = UDim2.new(0, 0, 0.1, 0)
+title.BackgroundTransparency = 1
+title.Text = "HELO " .. game.Players.LocalPlayer.Name .. " used Script COMPILATION (by LT GAMING)"
+title.TextSize = 30
+title.TextColor3 = Color3.fromRGB(255, 255, 0)
+title.Font = Enum.Font.SourceSansBold
+
+-- Tạo nội dung bên dưới
+local noidung = Instance.new("TextLabel")
+noidung.Parent = tbGui
+noidung.Size = UDim2.new(1, 0, 0.05, 0)
+noidung.Position = UDim2.new(0, 0, 0.2, 0)
+noidung.BackgroundTransparency = 1
+noidung.Text = "REMEMBER TO LIKE AND SUBSCRIBE TO LT GAMING CHANNEL"
+noidung.TextSize = 25
+noidung.TextColor3 = Color3.fromRGB(255, 255, 255)
+noidung.Font = Enum.Font.SourceSans
+
+-- Hiệu ứng mờ dần
+task.wait(2)
+for i = 0, 1, 0.02 do
+	title.TextTransparency = i
+	noidung.TextTransparency = i
+	task.wait(0.02)
+end
+
+tbGui:Destroy()
+
+local ScreenGui = Instance.new("ScreenGui")
+local ImageButton = Instance.new("ImageButton")
+local UICorner = Instance.new("UICorner")
+
+ScreenGui.Parent = game.CoreGui
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+ImageButton.Parent = ScreenGui
+ImageButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+ImageButton.BorderSizePixel = 0
+ImageButton.Position = UDim2.new(0.10615778, 0, 0.16217947, 0)
+ImageButton.Size = UDim2.new(0, 40, 0, 40)
+ImageButton.Image = "http://www.roblox.com/asset/?id=112045466994309"
+
+UICorner.CornerRadius = UDim.new(1, 10) 
+UICorner.Parent = ImageButton
+
+ImageButton.MouseButton1Down:Connect(function() 
+    game:GetService("VirtualInputManager"):SendKeyEvent(true, Enum.KeyCode.P, false, game)
+end)
+
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+repeat wait() until game:IsLoaded()
+local Window = Fluent:CreateWindow({
+        Title = "LT GAMING TỔNG HỢP",
+        SubTitle = "PREMIUM",
+        TabWidth = 157,
+        Size = UDim2.fromOffset(625, 520),
+        Acrylic = false,
+        Theme = "Dark",
+        MinimizeKey = Enum.KeyCode.P, -- Key to minimize the window
+    })
+local Tabs = {
+     Main0=Window:AddTab({ Title="INFORMATION" }),
+     main1=Window:AddTab({ Title="GROW A GARDEN" }),
+}
+Tabs.Main0:AddButton({
+        Title = "Discord",
+        Description = "DONE UPDATE",
+        Callback = function()
+            setclipboard("https://discord.gg/Wyvk7D6whg")
+           end
+    })
+
+    Tabs.Main0:AddButton({
+    Title = "Copy GameId",
+    Description = "Copy ID của game vào clipboard",
+    Callback = function()
+        setclipboard(tostring(game.GameId))
+        warn("Đã copy GameId: " .. game.GameId)
+    end
+})
+
+    Tabs.Main0:AddButton({
+    Title = "Copy PlaceId",
+    Description = "Copy PlaceId của game vào clipboard",
+    Callback = function()
+        setclipboard(tostring(game.PlaceId))
+        warn("Đã copy PlaceId: " .. game.PlaceId)
+    end
+})
+
+
+    Tabs.Main0:AddButton({
+    Title = "Youtuber",
+    Description = "SUBSCRIBE TO LT GAMING CHANNEL",
+    Callback = function()
+        setclipboard("https://www.youtube.com/@TlT_REG_GAMING")
+    end
+})
+    Tabs.Main0:AddButton({
+    Title = "INFORMATION",
+    Description =
+     "THIS SCRIPT IS JUST A PREMIUM BETA VERSION. SOME OF YOU CAN USE IT IN A GAME. IF IT HAS AN ERROR OR SOMETHING, REPORT IT TO THE DISCORD SERVER SO I CAN FIX IT.",
+    Callback = function()
+        warn("setclipboard: No link provided")
+    end
+})
+
+
+Tabs.Main0:AddButton({
+    Title = "INFORMATION",
+    Description ="Every 100 people registering for the script will have 1 big update for you or every 20 registrations will have 1 small update",
+    Callback = function()
+        warn("setclipboard: No link provided")
+    end
+})
+
+    task.spawn(function()
+    local Players = game:GetService("Players")
+    local VirtualUser = game:GetService("VirtualUser")
+    
+    Players.LocalPlayer.Idled:Connect(function()
+        VirtualUser:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+        task.wait(1)
+        VirtualUser:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+    end)
+end)
+
+    Tabs.Main0:AddButton({
+    Title = "Rejoin",
+    Description = "Re-enter the current server",
+    Callback = function()
+        local TeleportService = game:GetService("TeleportService")
+        local Players = game:GetService("Players")
+        local player = Players.LocalPlayer
+
+        -- Kiểm tra xem player có tồn tại ko
+        if player then
+            TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, player)
+        end
+    end
+})
+
+    Tabs.Main0:AddButton({
+    Title="FIX LAG",
+    Description="CHO THK ĐẦN NÀO CẦN ALL GAME",
+    Callback=function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/TurboLite/Script/main/FixLag.lua"))()
+    end
+})
+
+
+Tabs.main1:AddButton({
+    Title="ONLY GROW A GARDEN",
+    Description="dùng trong game GROW A GARDEN",
+})
+
+    Tabs.main1:AddButton({
+    Title="speed hub",
+    Description="",
+    Callback=function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/AhmadV99/Speed-Hub-X/main/Speed%20Hub%20X.lua",true))()
+    end
+})
+
+    Tabs.main1:AddButton({
+    Title="thunder zz",
+    Description="",
+    Callback=function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/ThundarZ/Welcome/refs/heads/main/Main/GaG/Main.lua"))()
+    end
+})
+
+Tabs.main1:AddButton({
+    Title="VEZXE HUB kaitun",
+    Description="",
+    Callback=function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/Dex-Bear/Vxezehub/refs/heads/main/VxezeHubGrowAGardenKaitun.lua"))()
+    end
+})
+
+Tabs.main1:AddButton({
+    Title="TBB HUB",
+    Description="",
+    Callback=function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/toilaBao22/script/refs/heads/main/grow%20a%20garden"))()
+    end
+})
+
+
+    Tabs.main1:AddButton({
+    Title="DR.ROX HUB",
+    Description="need to get key",
+    Callback=function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/BrySadW/GrowAGarden/refs/heads/main/GrowAGarden.lua"))()
+    end
+})
+
+    Tabs.main1:AddButton({
+    Title="NONAME",
+    Description="",
+    Callback=function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/ameicaa1/Grow-a-Garden/main/Grow_A_Garden.lua"))()
+    end
+})
+    
+    Tabs.main1:AddButton({
+    Title="Mercenaries Hub",
+    Description="",
+    Callback=function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/kosowa/asd/refs/heads/main/GaG.lua"))()
+    end
+})
+    
+
+    Tabs.main1:AddButton({
+    Title="spacehub",
+    Description="need to get key",
+    Callback=function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/ago106/SpaceHub/refs/heads/main/Multi"))()
+    end
+})
+    
+    Tabs.main1:AddButton({
+    Title="Doggo hub",
+    Description="",
+    Callback=function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/doggoman230/growagarden/refs/heads/main/script"))()
+    end
+})
+
+    Tabs.main1:AddButton({
+    Title="deso hub",
+    Description="",
+    Callback=function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/depthso/Grow-a-Garden/refs/heads/main/autofarm.lua"))()
+    end
+})
+
+    Tabs.main1:AddButton({
+    Title="combochronicle vault",
+    Description="KEY IQ",
+    Callback=function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/checkurasshole/Script/refs/heads/main/IQ"))()
+    end
+})
+
+    Tabs.main1:AddButton({
+    Title="TORA HUB",
+    Description="",
+    Callback=function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/gumanba/Scripts/refs/heads/main/GrowaGarden", true))()
+    end
+})
+
+    Tabs.main1:AddButton({
+    Title="NO LAG HUB",
+    Description="",
+    Callback=function()
+        loadstring(game:HttpGet("https://rawscripts.net/raw/Grow-a-Garden-NoLag-Hub-no-key-38699"))()
+    end
+})
+
+    Tabs.main1:AddButton({
+    Title="NATIVE HUB",
+    Description="need to get key",
+    Callback=function()
+        (loadstring or load)(game:HttpGet("https://getnative.cc/script/loader"))()
+    end
+})
+
+    Tabs.main1:AddButton({
+    Title="RONIX HUB",
+    Description="",
+    Callback=function()
+        loadstring(game:HttpGet("https://api.luarmor.net/files/v3/loaders/a8f02a61fc38bf9256dd0f17be6b16d7.lua"))()
+    end
+})
+
+    Tabs.main1:AddButton({
+    Title="Beecon Hub",
+    Description="",
+    Callback=function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/BaconBossScript/BeeconHub/main/BeeconHub"))()
+    end
+})
+
+    Tabs.main1:AddButton({
+    Title="Blue x hub ",
+    Description="",
+    Callback=function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/ameicaa1/Grow-a-Garden/main/Grow_A_Garden.lua"))()
+    end
+})
+
+Tabs.main1:AddButton({
+    Title="LUNOR HUB",
+    Description="cần key",
+    Callback=function()
+        loadstring(game:HttpGet("https://lunor.dev/loader"))()
+    end
+})
+
+    Tabs.main1:AddButton({
+    Title="Speed hub",
+    Description="",
+    Callback=function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/AhmadV99/Speed-Hub-X/main/Speed%20Hub%20X.lua", true))()
+    end
+})
+
+    Tabs.main1:AddButton({
+    Title="bebo hub ",
+    Description="need to get key",
+    Callback=function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/Bebo-Mods/BeboScripts/refs/heads/main/GrowAGarden.lua"))()
+    end
+})
+
+    Tabs.main1:AddButton({
+    Title="DOGGO",
+    Description="",
+    Callback=function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/doggoman230/growagarden/refs/heads/main/script"))()
+    end
+})
