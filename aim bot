@@ -1,5 +1,5 @@
 -- =====================================================
--- ROBLOX SILENT AIM & POV ESP - PHIÊN BẢN TỐI ƯU HÓA
+-- ROBLOX SILENT AIM (MAGIC BULLET) & FULL ESP - PHIÊN BẢN TỐI ƯU HÓA
 -- Tối ưu cho hiệu suất đa nền tảng (PC & Mobile)
 -- =====================================================
 
@@ -14,18 +14,23 @@ local Camera = workspace.CurrentCamera
 -- CẤU HÌNH (CONFIG)
 -- =====================================================
 local CONFIG = {
-    -- Silent Aim
+    -- Silent Aim (Magic Bullet)
     silent_aim_enabled = true,
-    aim_part = "Head",           -- Bộ phận nhắm: "Head", "HumanoidRootPart", "UpperTorso"
-    aim_fov = 150,               -- Giới hạn FOV (pixels từ tâm màn hình). 0 = Tắt FOV check.
+    aim_part = "Head",                   -- Bộ phận nhắm: "Head", "HumanoidRootPart", "UpperTorso"
+    aim_fov = 150,                       -- Giới hạn FOV (pixels từ tâm màn hình). 0 = Tắt FOV check.
+    aim_magic_bullet_enabled = true,     -- Bật/tắt Magic Bullet (Prediction)
+    aim_prediction_factor = 0.15,        -- Hệ số dự đoán (thời gian bay của đạn/độ trễ)
+    aim_visibility_check = true,         -- Chỉ nhắm khi mục tiêu nhìn thấy (tăng tính khó phát hiện)
     
     -- ESP
     esp_enabled = true,
-    esp_fov = 300,               -- Giới hạn FOV cho ESP. 0 = Tắt FOV check.
-    esp_color = Color3.fromRGB(255, 0, 0),
+    esp_fov = 300,                       -- Giới hạn FOV cho ESP. 0 = Tắt FOV check.
+    esp_color_visible = Color3.fromRGB(255, 0, 0), -- Màu Đỏ (Nhìn thấy)
+    esp_color_hidden = Color3.fromRGB(255, 255, 0),  -- Màu Vàng (Xuyên tường)
+    esp_wallhack_enabled = true,         -- Bật/tắt Wallhack (All ESP)
     
     -- Noclip (Luôn bật, loại bỏ keybind)
-    noclip_enabled = false,      -- Đặt là true nếu muốn Noclip luôn bật
+    noclip_enabled = false,
     
     -- Fast Reload (Luôn bật)
     fast_reload_enabled = true,
@@ -33,6 +38,7 @@ local CONFIG = {
 
 -- Biến cache
 local viewport_center = Vector2.new(0, 0)
+local WorldRoot = workspace.WorldModel or workspace
 
 -- =====================================================
 -- REMOTE FINDER (Giữ nguyên logic)
@@ -81,6 +87,47 @@ local function sameTeam(plr)
 end
 
 -- =====================================================
+-- WALLHACK/VISIBILITY CHECK LOGIC
+-- =====================================================
+
+local function is_visible(target_part)
+    local origin = Camera.CFrame.Position
+    local direction = target_part.Position - origin
+    local distance = direction.Magnitude
+    
+    local raycast_params = RaycastParams.new()
+    raycast_params.FilterType = Enum.RaycastFilterType.Exclude
+    raycast_params.FilterDescendantsInstances = {LocalPlayer.Character}
+    
+    local result = WorldRoot:Raycast(origin, direction.Unit * distance, raycast_params)
+    
+    if result then
+        -- Nếu vật va chạm không phải là mục tiêu hoặc một phần của mục tiêu
+        if not result.Instance:IsDescendantOf(target_part.Parent) and result.Instance ~= target_part then
+            return false
+        end
+    end
+    
+    return true
+end
+
+-- =====================================================
+-- MAGIC BULLET PREDICTION
+-- =====================================================
+
+local function predict_position(target_part)
+    if not CONFIG.aim_magic_bullet_enabled then
+        return target_part.Position
+    end
+    
+    local velocity = target_part.Velocity
+    local travel_time = CONFIG.aim_prediction_factor -- Hệ số dự đoán
+    local predicted_position = target_part.Position + (velocity * travel_time)
+    
+    return predicted_position
+end
+
+-- =====================================================
 -- TARGET SELECTOR (Tối ưu hóa)
 -- =====================================================
 
@@ -97,11 +144,17 @@ local function getTarget()
         if plr ~= LocalPlayer and not sameTeam(plr) then
             local char = plr.Character
             if char then
-                local head = char:FindFirstChild(CONFIG.aim_part)
+                local aim_part = char:FindFirstChild(CONFIG.aim_part)
                 local humanoid = char:FindFirstChild("Humanoid")
                 
-                if head and humanoid and humanoid.Health > 0 then
-                    local pos, vis = Camera:WorldToViewportPoint(head.Position)
+                if aim_part and humanoid and humanoid.Health > 0 then
+                    
+                    -- Kiểm tra tầm nhìn cho Silent Aim
+                    if CONFIG.aim_visibility_check and not is_visible(aim_part) then
+                        continue
+                    end
+                    
+                    local pos, vis = Camera:WorldToViewportPoint(aim_part.Position)
                     
                     if vis then
                         local screen_pos = Vector2.new(pos.X, pos.Y)
@@ -124,7 +177,7 @@ local function getTarget()
 end
 
 -- =====================================================
--- SILENT AIM (Tối ưu hóa và làm sạch)
+-- SILENT AIM (MAGIC BULLET) LOGIC
 -- =====================================================
 
 do
@@ -148,7 +201,8 @@ do
                         
                         -- Sửa đổi CFrame nếu tìm thấy mục tiêu và CFrame là argument thứ 2
                         if aim_part and typeof(args[2]) == "CFrame" then
-                            args[2] = aim_part.CFrame
+                            local predicted_pos = predict_position(aim_part)
+                            args[2] = CFrame.new(predicted_pos) -- Magic Bullet: Sửa CFrame thành vị trí dự đoán
                             return old(self, unpack(args))
                         end
                     end
@@ -169,46 +223,67 @@ do
     end)
 end
 
-print("[Silent Aim] Loaded OK. (FOV: " .. CONFIG.aim_fov .. ", Part: " .. CONFIG.aim_part .. ")")
+print("[Magic Bullet] Loaded OK. (Prediction: " .. CONFIG.aim_prediction_factor .. ")")
 
 -- =====================================================
--- POV ESP NÂNG CAO (Tối ưu hóa cho Mobile)
+-- FULL ESP & WALLHACK (All ESP)
 -- =====================================================
 
-local Boxes, Lines, Names = {}, {}, {}
+local Boxes, Lines, Names, HealthBars = {}, {}, {}, {}
 
 local function newESP(plr)
-    -- Chỉ tạo Drawing object nếu ESP được bật
     if not CONFIG.esp_enabled then return end
     
+    -- Box
     local box = Drawing.new("Square")
     box.Thickness = 2
     box.Filled = false
     box.Visible = false
-    box.Color = CONFIG.esp_color
+    box.Color = CONFIG.esp_color_visible
 
+    -- Snapline
     local line = Drawing.new("Line")
     line.Thickness = 2
     line.Visible = false
-    line.Color = CONFIG.esp_color
+    line.Color = CONFIG.esp_color_visible
 
+    -- Name/Distance
     local name = Drawing.new("Text")
     name.Center = true
     name.Size = 14
     name.Visible = false
     name.Outline = true
-    name.Color = CONFIG.esp_color
+    name.Color = CONFIG.esp_color_visible
+    
+    -- Health Bar (Background)
+    local health_bg = Drawing.new("Square")
+    health_bg.Thickness = 1
+    health_bg.Filled = true
+    health_bg.Visible = false
+    health_bg.Color = Color3.fromRGB(0, 0, 0)
+
+    -- Health Bar (Foreground)
+    local health_fg = Drawing.new("Square")
+    health_fg.Thickness = 1
+    health_fg.Filled = true
+    health_fg.Visible = false
+    health_fg.Color = Color3.fromRGB(0, 255, 0)
 
     Boxes[plr] = box
     Lines[plr] = line
     Names[plr] = name
+    HealthBars[plr] = {bg = health_bg, fg = health_fg}
 end
 
 local function removeESP(plr)
     if Boxes[plr] then Boxes[plr]:Remove() end
     if Lines[plr] then Lines[plr]:Remove() end
     if Names[plr] then Names[plr]:Remove() end
-    Boxes[plr], Lines[plr], Names[plr] = nil, nil, nil
+    if HealthBars[plr] then
+        HealthBars[plr].bg:Remove()
+        HealthBars[plr].fg:Remove()
+    end
+    Boxes[plr], Lines[plr], Names[plr], HealthBars[plr] = nil, nil, nil, nil
 end
 
 -- Khởi tạo ESP cho người chơi hiện tại
@@ -235,20 +310,24 @@ RunService.RenderStepped:Connect(function()
         local char = plr.Character
         local name = Names[plr]
         local line = Lines[plr]
+        local health_bar = HealthBars[plr]
         
         -- Ẩn tất cả nếu không hợp lệ
         local hide_all = function()
             box.Visible = false
             line.Visible = false
             name.Visible = false
+            health_bar.bg.Visible = false
+            health_bar.fg.Visible = false
         end
 
         if not char or not char:FindFirstChild("HumanoidRootPart") or not char:FindFirstChild("Humanoid") then
-            removeESP(plr) -- Xóa hẳn nếu character không hợp lệ
+            removeESP(plr)
             continue
         end
         
-        if char.Humanoid.Health <= 0 or sameTeam(plr) then
+        local humanoid = char.Humanoid
+        if humanoid.Health <= 0 or sameTeam(plr) then
             hide_all()
             continue
         end
@@ -257,8 +336,12 @@ RunService.RenderStepped:Connect(function()
         local pos, vis = Camera:WorldToViewportPoint(hrp.Position)
 
         if not vis then
-            hide_all()
-            continue
+            -- Nếu Wallhack TẮT, ẩn ESP khi không trên màn hình
+            if not CONFIG.esp_wallhack_enabled then
+                hide_all()
+                continue
+            end
+            -- Nếu Wallhack BẬT, tiếp tục vẽ (chỉ cần tính toán vị trí 2D)
         end
         
         local screen_pos = Vector2.new(pos.X, pos.Y)
@@ -270,29 +353,56 @@ RunService.RenderStepped:Connect(function()
             continue
         end
 
+        -- WALLHACK LOGIC: Kiểm tra tầm nhìn và đặt màu
+        local current_color = CONFIG.esp_color_visible
+        if CONFIG.esp_wallhack_enabled then
+            local visible = is_visible(hrp)
+            current_color = visible and CONFIG.esp_color_visible or CONFIG.esp_color_hidden
+        end
+        
         -- Tính toán Box Scale (Tối ưu hóa)
         local dist_3d = (Camera.CFrame.Position - hrp.Position).Magnitude
-        local scale = math.clamp(10 / dist_3d, 0.4, 1.5) -- Giảm 2/dist thành 10/dist để box không quá nhỏ
+        local scale = math.clamp(10 / dist_3d, 0.4, 1.5)
         local h = 140 * scale
         local w = 60 * scale
+        local box_pos = Vector2.new(pos.X - w/2, pos.Y - h/2)
 
         -- Cập nhật Box
         box.Size = Vector2.new(w, h)
-        box.Position = Vector2.new(pos.X - w/2, pos.Y - h/2)
+        box.Position = box_pos
+        box.Color = current_color
         box.Visible = true
 
         -- Cập nhật Line (Snapline)
         line.From = bottom_center
         line.To   = Vector2.new(pos.X, pos.Y)
+        line.Color = current_color
         line.Visible = true
+
+        -- Cập nhật Health Bar
+        local health_ratio = humanoid.Health / humanoid.MaxHealth
+        local health_height = h * health_ratio
+        local health_color = Color3.fromHSV(health_ratio * 0.33, 1, 1)
+        
+        -- Health Bar Background (Đen)
+        health_bar.bg.Size = Vector2.new(4, h + 2)
+        health_bar.bg.Position = Vector2.new(box_pos.X - 6, box_pos.Y - 1)
+        health_bar.bg.Visible = true
+        
+        -- Health Bar Foreground (Máu)
+        health_bar.fg.Size = Vector2.new(2, health_height)
+        health_bar.fg.Position = Vector2.new(box_pos.X - 5, box_pos.Y + h - health_height)
+        health_bar.fg.Color = health_color
+        health_bar.fg.Visible = true
 
         -- Cập nhật Name
         local head = char:FindFirstChild("Head")
         if head then
-            local headPos, headVis = Camera:WorldToViewportPoint(head.Position + Vector3.new(0, h/20, 0)) -- Offset tên lên trên đầu
+            local headPos, headVis = Camera:WorldToViewportPoint(head.Position + Vector3.new(0, h/20, 0))
             if headVis then
-                name.Position = Vector2.new(headPos.X, headPos.Y)
-                name.Text = plr.Name .. " [" .. math.floor(dist_3d) .. "m]" -- Thêm khoảng cách
+                name.Position = Vector2.new(headPos.X, headPos.Y - 10)
+                name.Text = plr.Name .. " [" .. math.floor(dist_3d) .. "m]"
+                name.Color = current_color
                 name.Visible = true
             else
                 name.Visible = false
@@ -303,7 +413,7 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
-print("[POV ESP] Loaded OK. (FOV: " .. CONFIG.esp_fov .. ")")
+print("[FULL ESP & WALLHACK] Loaded OK. (FOV: " .. CONFIG.esp_fov .. ")")
 
 -- =====================================================
 -- NOCLIP (Loại bỏ keybind, dùng config)
