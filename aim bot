@@ -1,181 +1,294 @@
--- // Silent Aim GF – Full FOV + Head Lock + Wallbang + Team Check
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
+local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
 
--- lấy team player (mỗi game GF dùng khác nhau, support hết)
-local function sameTeam(plr)
-    if not plr or plr == LocalPlayer then return true end
+local CONFIG = {  
+    ESP_ENABLED = true,
+    TRACER_ENABLED = true,
+    AIMHELP_ENABLED = true,
+    RADAR_ENABLED = true,
+    CROSSHAIR_ENABLED = true,
+    NOCLIP_ALLOWED = true,
+    NOCLIP_KEY = Enum.KeyCode.N,
+}
 
-    -- CASE 1: game dùng property Team
-    if plr.Team ~= nil and LocalPlayer.Team ~= nil then
-        return plr.Team == LocalPlayer.Team
-    end
+local uiVisible = true
 
-    -- CASE 2: game dùng attribute Team
-    if plr:GetAttribute("Team") and LocalPlayer:GetAttribute("Team") then
-        return plr:GetAttribute("Team") == LocalPlayer:GetAttribute("Team")
-    end
+local ESPBoxes = {}
+local ESPNames = {}
+local ESPTracers = {}
+local AimMarker = nil
+local Crosshair = nil
+local RadarParts = {}
 
-    return false
+local function isPlayerValid(plr)
+    if not plr or plr == LocalPlayer then return false end
+    local char = plr.Character
+    if not char then return false end
+    local hum = char:FindFirstChild("Humanoid")
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    local head = char:FindFirstChild("Head")
+    if not hum or not hrp or not head then return false end
+    if hum.Health <= 0 then return false end
+
+    if plr.Team and LocalPlayer.Team and plr.Team == LocalPlayer.Team then return false end
+    local a1 = plr:GetAttribute("Team"); local a2 = LocalPlayer:GetAttribute("Team")
+    if a1 and a2 and a1 == a2 then return false end
+
+    return true
 end
 
-local function getClosestTarget()
-    local best = nil
-    local closest = math.huge
+local function createESPFor(plr)
+    if ESPBoxes[plr] then return end
+    local box = Drawing.new("Square")
+    box.Thickness = 2
+    box.Filled = false
+    box.Visible = false
+
+    local name = Drawing.new("Text")
+    name.Size = 14
+    name.Center = true
+    name.Outline = true
+    name.Visible = false
+
+    local tracer = Drawing.new("Line")
+    tracer.Thickness = 2
+    tracer.Visible = false
+
+    ESPBoxes[plr] = box
+    ESPNames[plr] = name
+    ESPTracers[plr] = tracer
+end
+
+local function removeESPFor(plr)
+    if ESPBoxes[plr] then ESPBoxes[plr]:Remove() ESPBoxes[plr]=nil end
+    if ESPNames[plr] then ESPNames[plr]:Remove() ESPNames[plr]=nil end
+    if ESPTracers[plr] then ESPTracers[plr]:Remove() ESPTracers[plr]=nil end
+end
+
+local function ensureAimAndCrosshair()
+    if not AimMarker then
+        AimMarker = Drawing.new("Circle")
+        AimMarker.Radius = 6
+        AimMarker.Visible = false
+        AimMarker.Filled = true
+    end
+    if not Crosshair then
+        Crosshair = {}
+        Crosshair.h = Drawing.new("Line")
+        Crosshair.v = Drawing.new("Line")
+        Crosshair.h.Thickness = 1
+        Crosshair.v.Thickness = 1
+        Crosshair.h.Visible = CONFIG.CROSSHAIR_ENABLED
+        Crosshair.v.Visible = CONFIG.CROSSHAIR_ENABLED
+    end
+end
+
+local function drawRadar()
+    local screenW, screenH = Camera.ViewportSize.X, Camera.ViewportSize.Y
+    local radarCenter = Vector2.new(110, screenH - 110)
+    local radiusPx = 70
+    if not RadarParts.bg then
+        RadarParts.bg = Drawing.new("Circle")
+        RadarParts.bg.Position = radarCenter
+        RadarParts.bg.Radius = radiusPx
+        RadarParts.bg.Filled = false
+        RadarParts.bg.Thickness = 2
+        RadarParts.bg.Visible = CONFIG.RADAR_ENABLED
+    end  
+
+    if RadarParts.dots then
+        for _, d in ipairs(RadarParts.dots) do d:Remove() end
+    end
+
+    RadarParts.dots = {}
 
     for _, plr in ipairs(Players:GetPlayers()) do
-        if plr ~= LocalPlayer 
-           and not sameTeam(plr)  -- TEAM CHECK ✔
-           and plr.Character
-           and plr.Character:FindFirstChild("Head") 
-           and plr.Character:FindFirstChild("HumanoidRootPart")
-           and plr.Character:FindFirstChild("Humanoid")
-           and plr.Character.Humanoid.Health > 0
-        then
-            local head = plr.Character.Head
-            local pos, vis = Camera:WorldToViewportPoint(head.Position)
+        if isPlayerValid(plr) then
+            local hrp = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                local offset = hrp.Position - (LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character.HumanoidRootPart.Position or Camera.CFrame.Position)
+                local dist = Vector3.new(offset.X, 0, offset.Z).Magnitude
+                if dist <= 200 then
+                    local angle = math.atan2(offset.Z, offset.X)
+                    local scaled = (dist / 200) * radiusPx
+                    local dotPos = Vector2.new(radarCenter.X + math.cos(angle) * scaled, radarCenter.Y + math.sin(angle) * scaled)
 
-            if vis then
-                local center = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
-                local dist = (Vector2.new(pos.X, pos.Y) - center).Magnitude
+                    local dot = Drawing.new("Circle")
+                    dot.Radius = 3
+                    dot.Filled = true
+                    dot.Position = dotPos
+                    dot.Visible = CONFIG.RADAR_ENABLED
+                    table.insert(RadarParts.dots, dot)
+                end
+            end
+        end
+    end
+end
 
-                if dist < closest then
-                    closest = dist
-                    best = plr.Character
+local function predictHeadPos(char, dt)
+    local head = char:FindFirstChild("Head")
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not head or not hrp then return end
+    local vel = hrp.AssemblyLinearVelocity
+    return head.Position + vel * dt
+end
+
+ensureAimAndCrosshair()
+for _, p in ipairs(Players:GetPlayers()) do
+    if p ~= LocalPlayer then createESPFor(p) end
+end
+Players.PlayerAdded:Connect(function(p) if p ~= LocalPlayer then createESPFor(p) end end)
+Players.PlayerRemoving:Connect(function(p) removeESPFor(p) end)
+
+RunService.RenderStepped:Connect(function(dt)
+    local screenW, screenH = Camera.ViewportSize.X, Camera.ViewportSize.Y
+
+    if Crosshair then
+        Crosshair.h.From = Vector2.new(screenW/2 - 10, screenH/2)
+        Crosshair.h.To   = Vector2.new(screenW/2 + 10, screenH/2)
+        Crosshair.v.From = Vector2.new(screenW/2, screenH/2 - 10)
+        Crosshair.v.To   = Vector2.new(screenW/2, screenH/2 + 10)
+        Crosshair.h.Visible = true
+        Crosshair.v.Visible = true
+    end
+
+    if CONFIG.RADAR_ENABLED then
+        drawRadar()
+    end
+
+    for plr, box in pairs(ESPBoxes) do
+        local name = ESPNames[plr]
+        local tracer = ESPTracers[plr]
+        local char = plr.Character
+
+        if isPlayerValid(plr) and char then
+            local head = char:FindFirstChild("Head")
+            local hrp  = char:FindFirstChild("HumanoidRootPart")
+
+            if head and hrp then
+                local headPos, headVis = Camera:WorldToViewportPoint(head.Position)
+                local hrpPos, hrpVis = Camera:WorldToViewportPoint(hrp.Position)
+
+                if headVis or hrpVis then
+                    local dist = (Camera.CFrame.Position - hrp.Position).Magnitude
+                    local scale = math.clamp(2 / dist, 0.25, 1.5)
+                    local height = 140 * scale
+                    local width = 50 * scale
+
+                    local screenX = hrpPos.X
+                    local screenY = hrpPos.Y
+
+                    box.Size = Vector2.new(width, height)
+                    box.Position = Vector2.new(screenX - width/2, screenY - height/2)
+                    box.Color = Color3.fromRGB(255, 0, 0)
+                    box.Visible = true
+
+                    name.Position = Vector2.new(headPos.X, headPos.Y - height/2 - 10)
+                    name.Text = plr.Name
+                    name.Color = box.Color
+                    name.Visible = true
+
+                    tracer.From = Vector2.new(screenW/2, screenH - 10)
+                    tracer.To   = Vector2.new(screenX, screenY)
+                    tracer.Color = box.Color
+                    tracer.Visible = true
+                else
+                    box.Visible = false
+                    name.Visible = false
+                    tracer.Visible = false
+                end
+            else
+                box.Visible = false
+                name.Visible = false
+                tracer.Visible = false
+            end
+        else
+            if box then box.Visible = false end
+            if name then name.Visible = false end
+            if tracer then tracer.Visible = false end
+        end
+    end
+
+    local best, bestDist = nil, math.huge
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if isPlayerValid(plr) then
+            local head = plr.Character and plr.Character:FindFirstChild("Head")
+            if head then
+                local screenP, vis = Camera:WorldToViewportPoint(head.Position)
+                if vis then
+                    local center = Vector2.new(screenW/2, screenH/2)
+                    local d = (Vector2.new(screenP.X, screenP.Y) - center).Magnitude
+                    if d < bestDist then
+                        bestDist = d
+                        best = plr
+                    end
                 end
             end
         end
     end
 
-    return best
-end
-
-
-local old
-old = hookmetamethod(game, "__namecall", function(self, ...)
-    local args = {...}
-    local method = getnamecallmethod()
-
-    if method == "FireServer" and tostring(self):lower():find("shoot") then
-        local target = getClosestTarget()
-
-        if target and target:FindFirstChild("Head") then
-            args[2] = target.Head.CFrame
-            return old(self, unpack(args))
+    if best and best.Character and best.Character:FindFirstChild("Head") then
+        local predicted = predictHeadPos(best.Character, 0.12)
+        if predicted then
+            local scr, vis = Camera:WorldToViewportPoint(predicted)
+            if vis and AimMarker then
+                AimMarker.Position = Vector2.new(scr.X, scr.Y)
+                AimMarker.Color = Color3.fromRGB(0, 255, 255)
+                AimMarker.Visible = true
+            elseif AimMarker then
+                AimMarker.Visible = false
+            end
+        elseif AimMarker then
+            AimMarker.Visible = false
         end
+    else
+        if AimMarker then AimMarker.Visible = false end
     end
-
-    return old(self, ...)
-end)
---// PLAYER ESP – Box + Name + Team Check
-local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
-local Camera = workspace.CurrentCamera
-local RunService = game:GetService("RunService")
-
-local ESP_Boxes = {}
-local ESP_Names = {}
-
--- team check (hỗ trợ cả Team property & Attribute Team)
-local function sameTeam(plr)
-    if not plr or plr == LocalPlayer then return true end
-
-    if plr.Team and LocalPlayer.Team then
-        return plr.Team == LocalPlayer.Team
-    end
-
-    if plr:GetAttribute("Team") and LocalPlayer:GetAttribute("Team") then
-        return plr:GetAttribute("Team") == LocalPlayer:GetAttribute("Team")
-    end
-
-    return false
-end
-
-local function createESP(plr)
-    local box = Drawing.new("Square")
-    box.Thickness = 2
-    box.Filled = false
-    box.Color = Color3.fromRGB(255, 0, 0)
-    box.Visible = false
-
-    local name = Drawing.new("Text")
-    name.Size = 16
-    name.Color = Color3.fromRGB(255, 255, 255)
-    name.Center = true
-    name.Outline = true
-    name.Visible = false
-
-    ESP_Boxes[plr] = box
-    ESP_Names[plr] = name
-end
-
-local function removeESP(plr)
-    if ESP_Boxes[plr] then ESP_Boxes[plr]:Remove() end
-    if ESP_Names[plr] then ESP_Names[plr]:Remove() end
-    ESP_Boxes[plr] = nil
-    ESP_Names[plr] = nil
-end
-
-for _, plr in ipairs(Players:GetPlayers()) do
-    if plr ~= LocalPlayer then createESP(plr) end
-end
-
-Players.PlayerAdded:Connect(function(plr)
-    if plr ~= LocalPlayer then createESP(plr) end
 end)
 
-Players.PlayerRemoving:Connect(function(plr)
-    removeESP(plr)
+local noclip = false
+
+UIS.InputBegan:Connect(function(i)
+    if i.KeyCode == CONFIG.NOCLIP_KEY then
+        noclip = not noclip
+        print("[SAFE PACK] Noclip:", noclip)
+    end
 end)
 
-
-RunService.RenderStepped:Connect(function()
-    for plr, box in pairs(ESP_Boxes) do
-        local char = plr.Character
-        local name = ESP_Names[plr]
-
-        if
-            not char or
-            not char:FindFirstChild("HumanoidRootPart") or
-            not char:FindFirstChild("Humanoid") or
-            char.Humanoid.Health <= 0 or
-            sameTeam(plr) -- TEAM CHECK ✔
-        then
-            box.Visible = false
-            name.Visible = false
-            continue
-        end
-
-        local hrp = char.HumanoidRootPart
-        local head = char:FindFirstChild("Head")
-
-        local pos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
-
-        if not onScreen then
-            box.Visible = false
-            name.Visible = false
-            continue
-        end
-
-        -- Box size
-        local distance = (Camera.CFrame.Position - hrp.Position).Magnitude
-        local scale = math.clamp(2 / distance, 0.3, 1.5)
-        local height = 4 * scale
-        local width = 2 * scale
-
-        local x = pos.X - width * 50
-        local y = pos.Y - height * 50
-
-        box.Size = Vector2.new(width * 100, height * 100)
-        box.Position = Vector2.new(x, y)
-        box.Visible = true
-
-        if head then
-            local headPos = Camera:WorldToViewportPoint(head.Position + Vector3.new(0, 1, 0))
-            name.Position = Vector2.new(headPos.X, headPos.Y - 15)
-            name.Text = plr.Name
-            name.Visible = true
+RunService.Stepped:Connect(function()
+    if noclip and LocalPlayer.Character then
+        for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = false
+            end
         end
     end
 end)
+
+local UserInputService = game:GetService("UserInputService")
+local camera = workspace.CurrentCamera
+
+local minFOV = 40
+local maxFOV = 100000
+local step = 10
+
+camera.FieldOfView = 70
+
+UserInputService.InputBegan:Connect(function(input, gp)
+    if gp then return end
+
+    if input.KeyCode == Enum.KeyCode.P then
+        camera.FieldOfView = math.clamp(camera.FieldOfView + step, minFOV, maxFOV)
+        print("FOV:", camera.FieldOfView)
+    end
+
+    if input.KeyCode == Enum.KeyCode.O then
+        camera.FieldOfView = math.clamp(camera.FieldOfView - step, minFOV, maxFOV)
+        print("FOV:", camera.FieldOfView)
+    end
+end)
+
+print("[SAFE FULL PACK] Loaded. TẤT CẢ LUÔN BẬT – CHỈ CÓ PHÍM N (Noclip) và P/O (FOV).")
