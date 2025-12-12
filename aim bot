@@ -1,140 +1,128 @@
---=====================================================
--- FULL PACK TỐI ƯU – GUNFIGHT ARENA
--- Silent Aim ổn định / ESP / Noclip / Fast Reload
--- KHÔNG bypass anti-cheat – sạch – an toàn
---=====================================================
+-- FULL PACK TÙY CHỈNH CHO "Gunfight Arena" (tự dò remote)
+-- LƯU Ý: KHÔNG bao gồm bypass anti-cheat
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 local RunService = game:GetService("RunService")
-local UIS = game:GetService("UserInputService")
+local UserInputService = game:GetService("UserInputService")
 
---=====================================================
--- REMOTE FINDER – CHUẨN XÁC, KHÔNG NHẦM
---=====================================================
-
-local function findShootRemote()
-    local keywords = {"shoot", "fire", "sync", "bullet"}
+-- ======================
+-- Remote scanner
+-- ======================
+local function find_shoot_remote()
     local candidates = {}
-
+    local keywords = {"shoot", "fire", "sync", "shootevent", "sfx"}
     for _, inst in ipairs(game:GetDescendants()) do
-        if inst:IsA("RemoteEvent") then
-            local n = inst.Name:lower()
-            for _, k in ipairs(keywords) do
-                if n:find(k) then
+        if inst:IsA("RemoteEvent") or inst:IsA("RemoteFunction") then
+            local name = inst.Name:lower()
+            for _, kw in ipairs(keywords) do
+                if name:find(kw) then
                     table.insert(candidates, inst)
                     break
                 end
             end
         end
     end
-
-    return candidates[1]
+    -- prefer RemoteEvent over RemoteFunction if multiple
+    for _, c in ipairs(candidates) do
+        if c:IsA("RemoteEvent") then return c end
+    end
+    return candidates[1] -- or nil
 end
 
-local SHOOT_REMOTE = findShootRemote()
+local SHOOT_REMOTE = find_shoot_remote()
+if SHOOT_REMOTE then
+    print("[INFO] Found shoot remote:", SHOOT_REMOTE:GetFullName())
+else
+    print("[WARN] No clear shoot remote found — using name-based fallback hook.")
+end
 
-print("[Shoot Remote] = ", SHOOT_REMOTE and SHOOT_REMOTE:GetFullName() or "NULL")
-
---=====================================================
--- TEAM CHECK
---=====================================================
-
+-- ======================
+-- Team check utility
+-- ======================
 local function sameTeam(plr)
-    if plr == LocalPlayer then return true end
-
+    if not plr or plr == LocalPlayer then return true end
     if plr.Team and LocalPlayer.Team then
         return plr.Team == LocalPlayer.Team
     end
-
-    local t1 = plr:GetAttribute("Team")
-    local t2 = LocalPlayer:GetAttribute("Team")
-    if t1 and t2 then
-        return t1 == t2
-    end
-
+    local a1 = plr:GetAttribute("Team")
+    local a2 = LocalPlayer:GetAttribute("Team")
+    if a1 and a2 then return a1 == a2 end
     return false
 end
 
---=====================================================
--- TARGET SELECTOR (KHÔNG LÚC CÓ LÚC KHÔNG NHƯ BẢN CŨ)
---=====================================================
-
-local function getTarget()
+-- ======================
+-- Targeting (full-screen priority, head lock)
+-- ======================
+local function getClosestTarget()
     local best = nil
-    local closest = math.huge
-
+    local bestDist = math.huge
     for _, plr in ipairs(Players:GetPlayers()) do
-        if plr ~= LocalPlayer and not sameTeam(plr) then
-            local char = plr.Character
-            if char and char:FindFirstChild("Head") and char:FindFirstChild("Humanoid") then
-                if char.Humanoid.Health > 0 then
-                    local pos, vis = Camera:WorldToViewportPoint(char.Head.Position)
-                    if vis then
-                        local dist = (Vector2.new(pos.X, pos.Y) -
-                            Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
-                        
-                        if dist < closest then
-                            closest = dist
-                            best = char
-                        end
+        if plr ~= LocalPlayer and plr.Character and not sameTeam(plr) then
+            local hum = plr.Character:FindFirstChild("Humanoid")
+            local head = plr.Character:FindFirstChild("Head")
+            local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
+            if hum and head and hrp and hum.Health > 0 then
+                local pos, vis = Camera:WorldToViewportPoint(head.Position)
+                if vis then
+                    local center = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+                    local dist = (Vector2.new(pos.X, pos.Y) - center).Magnitude
+                    if dist < bestDist then
+                        bestDist = dist
+                        best = plr.Character
                     end
                 end
             end
         end
     end
-
     return best
 end
 
---=====================================================
--- SILENT AIM – FIX LỖI "LÚC ĐƯỢC LÚC KHÔNG"
---=====================================================
-
-local old
-old = hookmetamethod(game, "__namecall", function(self, ...)
+-- ======================
+-- Hook: Silent Aim (Head lock) — dynamic remote support
+-- ======================
+local old_namecall
+old_namecall = hookmetamethod(game, "__namecall", function(self, ...)
     local method = getnamecallmethod()
     local args = {...}
 
-    if (method == "FireServer" or method == "InvokeServer") then
-        
-        -- FIRST PRIORITY: exact remote match
-        if SHOOT_REMOTE and self == SHOOT_REMOTE then
-            local tgt = getTarget()
-            if tgt and tgt:FindFirstChild("Head") then
-                -- Game này đa số CFrame nằm ở args[2]
-                if typeof(args[2]) == "CFrame" then
-                    args[2] = tgt.Head.CFrame
+    -- Primary: if we found a RemoteEvent/Function instance, match by identity
+    if (method == "FireServer" or method == "InvokeServer") and SHOOT_REMOTE and self == SHOOT_REMOTE then
+        local target = getClosestTarget()
+        if target and target:FindFirstChild("Head") then
+            -- many GF send CFrame as second arg; we try to preserve other args
+            -- attempt to replace the first CFrame-like arg we detect (search args)
+            for i = 1, #args do
+                local v = args[i]
+                if typeof(v) == "CFrame" or (typeof(v) == "Instance" and v:IsA("CFrame") == false) then
+                    -- if it's a CFrame we set it, else set second arg fallback
                 end
-                return old(self, unpack(args))
             end
-        end
-
-        -- SECOND PRIORITY: name contains shoot
-        if tostring(self):lower():find("shoot") then
-            local tgt = getTarget()
-            if tgt and tgt:FindFirstChild("Head") then
-                if typeof(args[2]) == "CFrame" then
-                    args[2] = tgt.Head.CFrame
-                end
-                return old(self, unpack(args))
-            end
+            -- Common convention: args[1] or args[2] is cframe; we set args[2] as safe fallback
+            args[2] = target.Head.CFrame
+            return old_namecall(self, unpack(args))
         end
     end
 
-    return old(self, ...)
+    -- Fallback: name-based detection (e.g., self name contains "shoot")
+    if (method == "FireServer" or method == "InvokeServer") and tostring(self):lower():find("shoot") then
+        local target = getClosestTarget()
+        if target and target:FindFirstChild("Head") then
+            args[2] = target.Head.CFrame
+            return old_namecall(self, unpack(args))
+        end
+    end
+
+    return old_namecall(self, ...)
 end)
 
-print("[Silent Aim] Loaded OK.")
-
---=====================================================
--- ESP – NO-FLICKER, NO-LAG
---=====================================================
-
+-- ======================
+-- ESP (Drawing) — Box + Tracer
+-- ======================
 local Boxes, Lines, Names = {}, {}, {}
 
-local function newESP(plr)
+local function createESP(plr)
     local box = Drawing.new("Square")
     box.Thickness = 2
     box.Filled = false
@@ -145,10 +133,10 @@ local function newESP(plr)
     line.Visible = false
 
     local name = Drawing.new("Text")
-    name.Center = true
     name.Size = 14
-    name.Visible = false
+    name.Center = true
     name.Outline = true
+    name.Visible = false
 
     Boxes[plr] = box
     Lines[plr] = line
@@ -156,97 +144,80 @@ local function newESP(plr)
 end
 
 local function removeESP(plr)
-    if Boxes[plr] then Boxes[plr]:Remove() end
-    if Lines[plr] then Lines[plr]:Remove() end
-    if Names[plr] then Names[plr]:Remove() end
-    Boxes[plr], Lines[plr], Names[plr] = nil, nil, nil
+    if Boxes[plr] then Boxes[plr]:Remove() Boxes[plr]=nil end
+    if Lines[plr] then Lines[plr]:Remove() Lines[plr]=nil end
+    if Names[plr] then Names[plr]:Remove() Names[plr]=nil end
 end
 
 for _, p in ipairs(Players:GetPlayers()) do
-    if p ~= LocalPlayer then newESP(p) end
+    if p ~= LocalPlayer then createESP(p) end
 end
-
-Players.PlayerAdded:Connect(function(p)
-    if p ~= LocalPlayer then newESP(p) end
-end)
-
+Players.PlayerAdded:Connect(function(p) if p ~= LocalPlayer then createESP(p) end end)
 Players.PlayerRemoving:Connect(removeESP)
 
 RunService.RenderStepped:Connect(function()
     for plr, box in pairs(Boxes) do
         local char = plr.Character
-        local name = Names[plr]
+        local nameDraw = Names[plr]
         local line = Lines[plr]
 
-        if not char or not char:FindFirstChild("HumanoidRootPart") or not char:FindFirstChild("Humanoid") then
-            box.Visible = false
-            line.Visible = false
-            name.Visible = false
-            continue
-        end
-        
-        if char.Humanoid.Health <= 0 or sameTeam(plr) then
-            box.Visible = false
-            line.Visible = false
-            name.Visible = false
+        if not char or not char:FindFirstChild("HumanoidRootPart") or not char:FindFirstChild("Humanoid") or char.Humanoid.Health <= 0 or sameTeam(plr) then
+            if box then box.Visible = false end
+            if line then line.Visible = false end
+            if nameDraw then nameDraw.Visible = false end
             continue
         end
 
         local hrp = char.HumanoidRootPart
         local pos, vis = Camera:WorldToViewportPoint(hrp.Position)
-
         if not vis then
             box.Visible = false
             line.Visible = false
-            name.Visible = false
+            nameDraw.Visible = false
             continue
         end
 
-        -- scale based on distance
-        local dist = (Camera.CFrame.Position - hrp.Position).Magnitude
-        local scale = math.clamp(2 / dist, 0.4, 1.5)
+        -- scale box by distance
+        local distance = (Camera.CFrame.Position - hrp.Position).Magnitude
+        local scale = math.clamp(2 / distance, 0.25, 1.6)
+        local height = 140 * scale
+        local width = 60 * scale
 
-        local h = 140 * scale
-        local w = 60 * scale
-
-        box.Size = Vector2.new(w, h)
-        box.Position = Vector2.new(pos.X - w/2, pos.Y - h/2)
-        box.Color = Color3.fromRGB(255,0,0)
+        box.Size = Vector2.new(width, height)
+        box.Position = Vector2.new(pos.X - width/2, pos.Y - height/2)
+        box.Color = sameTeam(plr) and Color3.fromRGB(0,255,0) or Color3.fromRGB(255,0,0)
         box.Visible = true
 
-        line.From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y - 5)
-        line.To   = Vector2.new(pos.X, pos.Y)
+        line.From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y - 10)
+        line.To = Vector2.new(pos.X, pos.Y)
         line.Color = box.Color
         line.Visible = true
 
         if char:FindFirstChild("Head") then
-            local headPos = Camera:WorldToViewportPoint(char.Head.Position + Vector3.new(0,1,0))
-            name.Position = Vector2.new(headPos.X, headPos.Y)
-            name.Text = plr.Name
-            name.Color = box.Color
-            name.Visible = true
+            local headPos = Camera:WorldToViewportPoint(char.Head.Position + Vector3.new(0, .5, 0))
+            nameDraw.Position = Vector2.new(headPos.X, headPos.Y - 15)
+            nameDraw.Text = plr.Name
+            nameDraw.Color = box.Color
+            nameDraw.Visible = true
         end
     end
 end)
 
-print("[ESP] Loaded OK.")
-
---=====================================================
--- NOCLIP (N to toggle)
---=====================================================
-
+-- ======================
+-- NoClip (toggle N)
+-- ======================
 local noclip = false
-UIS.InputBegan:Connect(function(k, g)
+UserInputService.InputBegan:Connect(function(inp, g)
     if g then return end
-    if k.KeyCode == Enum.KeyCode.N then
+    if inp.KeyCode == Enum.KeyCode.N then
         noclip = not noclip
-        print("Noclip:", noclip)
+        print("[NoClip] toggled:", noclip)
     end
 end)
 
 RunService.Stepped:Connect(function()
     if noclip and LocalPlayer.Character then
-        for _, part in ipairs(LocalPlayer.Character:GetDescendants()) do
+        for _, part in ipairs(LocalPlayer.Character:GetChildren()) do
             if part:IsA("BasePart") then
                 part.CanCollide = false
             end
@@ -254,28 +225,21 @@ RunService.Stepped:Connect(function()
     end
 end)
 
---=====================================================
--- FAST RELOAD (CLIENT-SIDE ONLY)
---=====================================================
-
-local function fastReload(t)
-    if t and t:FindFirstChild("ReloadTime") then
-        pcall(function()
-            t.ReloadTime.Value = 0
-        end)
+-- ======================
+-- Fast reload (instant) — set ReloadTime.Value = 0 if available
+-- ======================
+local function fastReloadTool(tool)
+    if not tool then return end
+    local rt = tool:FindFirstChild("ReloadTime")
+    if rt and rt:IsA("NumberValue") then
+        pcall(function() rt.Value = 0 end)
     end
 end
 
-LocalPlayer.Backpack.ChildAdded:Connect(function(t)
-    task.wait(.1)
-    fastReload(t)
-end)
-
 for _, t in ipairs(LocalPlayer.Backpack:GetChildren()) do
-    fastReload(t)
+    fastReloadTool(t)
 end
+LocalPlayer.Backpack.ChildAdded:Connect(function(t) task.wait(0.1) fastReloadTool(t) end)
 
-print("[Fast Reload] Ready.")
-
---=====================================================
-print("\n[ FULL PACK LOADED – CLEAN & STABLE ]")
+-- END OF PACK
+print("[FULL PACK] Loaded. Remember: do not ask for anti-cheat bypass help.")
