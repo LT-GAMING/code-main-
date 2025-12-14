@@ -1,0 +1,311 @@
+
+--//Full test V1 claim skin,camos GF
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UIS = game:GetService("UserInputService")
+
+local Player = Players.LocalPlayer
+local PlayerGui = Player:WaitForChild("PlayerGui")
+
+--// find Weapon,Camo
+local weapons = {}
+for _,v in ipairs(ReplicatedStorage.Weapons:GetChildren()) do
+    table.insert(weapons, v.Name)
+end
+
+local camos = {}
+for _,v in ipairs(ReplicatedStorage.Camos:GetChildren()) do
+    table.insert(camos, v.Name)
+end
+
+
+local primary = weapons[1]
+local secondary = weapons[1]
+local primaryCamo = camos[1]
+local secondaryCamo = camos[1]
+
+local autoPrimary = false
+local autoSecondary = false
+local autoPrimaryCamo = false
+local autoSecondaryCamo = false
+
+
+local function Create(class, props)
+    local o = Instance.new(class)
+    for i,v in pairs(props) do o[i] = v end
+    return o
+end
+
+-- UI ROOT
+local gui = Create("ScreenGui", {
+    Name = "WeaponUI",
+    Parent = PlayerGui,
+    ResetOnSpawn = false,
+})
+
+
+local main = Create("ScrollingFrame", {
+    Parent = gui,
+    Size = UDim2.new(0, 420, 0, 370),
+    Position = UDim2.new(0.5, -210, 0.5, -180),
+    BackgroundColor3 = Color3.fromRGB(20,20,20),
+    BackgroundTransparency = 0.15,
+    BorderSizePixel = 0,
+    CanvasSize = UDim2.new(0,0,0,0),
+    ScrollBarImageColor3 = Color3.fromRGB(120,120,120),
+})
+Create("UICorner",{Parent = main})
+
+local padding = Create("UIPadding", {
+    Parent = main,
+    PaddingTop = UDim.new(0,10),
+    PaddingLeft = UDim.new(0,10),
+    PaddingRight = UDim.new(0,10),
+})
+
+local mainList = Create("UIListLayout", {
+    Parent = main,
+    Padding = UDim.new(0,8),
+    SortOrder = Enum.SortOrder.LayoutOrder,
+})
+
+
+local function MakeSection(titleText)
+    local frame = Create("Frame", {
+        Parent = main,
+        Size = UDim2.new(1, -10, 0, 150),
+        BackgroundColor3 = Color3.fromRGB(35,35,35),
+        BackgroundTransparency = 0.15,
+    })
+    Create("UICorner",{Parent=frame})
+
+    Create("TextLabel",{
+        Parent = frame,
+        Text = titleText,
+        Font = Enum.Font.GothamBold,
+        TextSize = 16,
+        BackgroundTransparency = 1,
+        TextColor3 = Color3.new(1,1,1),
+        Position = UDim2.new(0, 10, 0, 5),
+        Size = UDim2.new(1, -20, 0, 20),
+    })
+
+    local container = Create("Frame", {
+        Parent = frame,
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, -20, 1, -35),
+        Position = UDim2.new(0,10,0,30)
+    })
+
+    Create("UIListLayout",{
+        Parent = container,
+        Padding = UDim.new(0,4)
+    })
+
+    return container
+end
+
+
+local function MakeDropdown(parent, text, list, callback)
+    local holder = Create("Frame",{
+        Parent = parent,
+        Size = UDim2.new(1,0,0,30),
+        BackgroundColor3 = Color3.fromRGB(60,60,60),
+        BackgroundTransparency = 0.05,
+    })
+    Create("UICorner", {Parent = holder})
+
+    local btn = Create("TextButton", {
+        Parent = holder,
+        Size = UDim2.new(1, -6, 1, -6),
+        Position = UDim2.new(0,3,0,3),
+        BackgroundColor3 = Color3.fromRGB(45,45,45),
+        Text = text .. ": " .. list[1],
+        TextColor3 = Color3.new(1,1,1),
+        Font = Enum.Font.Gotham,
+        TextSize = 14,
+    })
+    Create("UICorner",{Parent=btn})
+
+    btn.MouseButton1Click:Connect(function()
+        local drop = Create("ScrollingFrame", {
+            Parent = parent,
+            Size = UDim2.new(1,0,0,120),
+            CanvasSize = UDim2.new(0,0,0,#list*28),
+            BackgroundColor3 = Color3.fromRGB(40,40,40),
+            BackgroundTransparency = 0.1,
+            ScrollBarThickness = 4,
+        })
+        Create("UICorner",{Parent=drop})
+
+        Create("UIListLayout", {Parent = drop})
+
+        for _,item in ipairs(list) do
+            local opt = Create("TextButton",{
+                Parent = drop,
+                Size = UDim2.new(1,0,0,28),
+                BackgroundColor3 = Color3.fromRGB(55,55,55),
+                Text = item,
+                Font = Enum.Font.Gotham,
+                TextSize = 13,
+                TextColor3 = Color3.new(1,1,1)
+            })
+            Create("UICorner",{Parent=opt})
+
+            opt.MouseButton1Click:Connect(function()
+                btn.Text = text .. ": " .. item
+                callback(item)
+                drop:Destroy()
+            end)
+        end
+    end)
+end
+
+
+local function MakeToggle(parent, text, callback)
+    local frame = Create("Frame",{
+        Parent = parent,
+        Size = UDim2.new(1,0,0,28),
+        BackgroundTransparency = 1,
+    })
+
+    Create("TextLabel",{
+        Parent = frame,
+        Text = text,
+        BackgroundTransparency = 1,
+        TextColor3 = Color3.new(1,1,1),
+        Font = Enum.Font.Gotham,
+        TextSize = 14,
+        Size = UDim2.new(0.7,0,1,0),
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+
+  
+    local toggle = false
+
+    local bg = Create("Frame", {
+        Parent = frame,
+        Size = UDim2.new(0,38,0,18),
+        Position = UDim2.new(1, -45, 0.5, -9),
+        BackgroundColor3 = Color3.fromRGB(80,80,80),
+    })
+    Create("UICorner", {Parent = bg})
+
+    local dot = Create("Frame", {
+        Parent = bg,
+        Size = UDim2.new(0,14,0,14),
+        Position = UDim2.new(0,2,0.5,-7),
+        BackgroundColor3 = Color3.fromRGB(180,180,180),
+    })
+    Create("UICorner",{Parent=dot})
+
+    bg.InputBegan:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 then
+            toggle = not toggle
+
+            if toggle then
+                bg.BackgroundColor3 = Color3.fromRGB(0,180,70)
+                dot:TweenPosition(UDim2.new(1,-16,0.5,-7),"Out","Quad",0.15,true)
+            else
+                bg.BackgroundColor3 = Color3.fromRGB(80,80,80)
+                dot:TweenPosition(UDim2.new(0,2,0.5,-7),"Out","Quad",0.15,true)
+            end
+
+            callback(toggle)
+        end
+    end)
+end
+
+local function MakeButton(parent, text, callback)
+    local btn = Create("TextButton",{
+        Parent = parent,
+        Size = UDim2.new(1,0,0,30),
+        BackgroundColor3 = Color3.fromRGB(75,75,75),
+        Text = text,
+        TextColor3 = Color3.new(1,1,1),
+        Font = Enum.Font.GothamBold,
+        TextSize = 14,
+    })
+    Create("UICorner",{Parent=btn})
+
+    btn.MouseButton1Click:Connect(callback)
+end
+
+
+
+--GUN
+local p1 = MakeSection("Primary Weapon")
+MakeDropdown(p1,"Primary Gun",weapons,function(v)
+    primary = v
+    if autoPrimary then Player:SetAttribute("Primary",primary) end
+end)
+MakeToggle(p1,"Auto Apply(Deo Co Tac Dung)",function(v)
+    autoPrimary = v
+    if v then Player:SetAttribute("Primary", primary) end
+end)
+MakeButton(p1, "Apply", function()
+    Player:SetAttribute("Primary", primary)
+end)
+
+-- CAMO
+local pCamo = MakeSection("Primary Camo")
+MakeDropdown(pCamo,"Primary Camo",camos,function(v)
+    primaryCamo = v
+    if autoPrimaryCamo then Player:SetAttribute("PrimaryCamo",primaryCamo) end
+end)
+MakeToggle(pCamo,"Auto Apply",function(v)
+    autoPrimaryCamo = v
+    if v then Player:SetAttribute("PrimaryCamo", primaryCamo) end
+end)
+MakeButton(pCamo,"Apply Camo Now", function()
+    Player:SetAttribute("PrimaryCamo",primaryCamo)
+end)
+
+-- GUN
+local s1 = MakeSection("Secondary Weapon")
+MakeDropdown(s1,"Secondary Gun",weapons,function(v)
+    secondary = v
+    if autoSecondary then Player:SetAttribute("Secondary",secondary) end
+end)
+MakeToggle(s1,"Auto Apply",function(v)
+    autoSecondary = v
+    if v then Player:SetAttribute("Secondary",secondary) end
+end)
+MakeButton(s1,"Apply Secondary Now", function()
+    Player:SetAttribute("Secondary",secondary)
+end)
+
+-- SECONDARY CAMO
+local sCamo = MakeSection("Secondary Camo")
+MakeDropdown(sCamo,"Secondary Camo",camos,function(v)
+    secondaryCamo = v
+    if autoSecondaryCamo then Player:SetAttribute("SecondaryCamo",secondaryCamo) end
+end)
+MakeToggle(sCamo,"Auto Apply",function(v)
+    autoSecondaryCamo = v
+    if v then Player:SetAttribute("SecondaryCamo",secondaryCamo) end
+end)
+MakeButton(sCamo,"Apply Camo Now",function()
+    Player:SetAttribute("SecondaryCamo",secondaryCamo)
+end)
+
+-----------------------------------------------------
+------------------- UPDATE SCROLL -------------------
+-----------------------------------------------------
+task.defer(function()
+    main.CanvasSize = UDim2.new(0,0,0,mainList.AbsoluteContentSize.Y + 20)
+end)
+
+mainList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    main.CanvasSize = UDim2.new(0,0,0,mainList.AbsoluteContentSize.Y + 20)
+end)
+
+-----------------------------------------------------
+----------------------- TOGGLE UI -------------------
+-----------------------------------------------------
+UIS.InputBegan:Connect(function(i, gp)
+    if gp then return end
+    if i.KeyCode == Enum.KeyCode.Insert then
+        main.Visible = not main.Visible
+    end
+end)
