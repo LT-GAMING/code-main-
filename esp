@@ -1,0 +1,265 @@
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+local RunService = game:GetService("RunService")
+
+local function sameTeam(plr)
+    if not plr or plr == LocalPlayer then return true end
+
+    if plr.Team and LocalPlayer.Team then
+        return plr.Team == LocalPlayer.Team 
+    end
+
+    if plr:GetAttribute("Team") and LocalPlayer:GetAttribute("Team") then
+        return plr:GetAttribute("Team") == LocalPlayer:GetAttribute("Team")
+    end
+
+    return false
+end
+
+local function getClosestTarget()
+    local best = nil
+    local closest = 999999
+
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer 
+           and not sameTeam(plr)
+           and plr.Character
+           and plr.Character:FindFirstChild("Head")
+           and plr.Character:FindFirstChild("HumanoidRootPart")
+           and plr.Character:FindFirstChild("Humanoid")
+           and plr.Character.Humanoid.Health > 0
+        then
+            local head = plr.Character.Head
+            local pos, vis = Camera:WorldToViewportPoint(head.Position)
+
+            if vis then
+                local center = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+                local dist = (Vector2.new(pos.X, pos.Y) - center).Magnitude
+
+                if dist < closest then
+                    closest = dist
+                    best = plr.Character
+                end
+            end
+        end
+    end
+
+    return best
+end
+
+---------------------------------------------------------
+-- SILENT AIM (HOOK SHOOT)
+---------------------------------------------------------
+
+local old
+old = hookmetamethod(game, "__namecall", function(self, ...)
+    local args = {...}
+    local method = getnamecallmethod()
+
+    if method == "FireServer" and tostring(self):lower():find("shoot") then
+        local target = getClosestTarget()
+        if target and target:FindFirstChild("Head") then
+            args[2] = target.Head.CFrame
+            return old(self, unpack(args))
+        end
+    end
+    
+    return old(self, ...)
+end)
+
+---------------------------------------------------------
+-- ESP BOX + ESP LINE
+---------------------------------------------------------
+
+local Boxes = {}
+local Lines = {}
+
+local function createESP(plr)
+    local box = Drawing.new("Square")
+    box.Color = Color3.fromRGB(255, 0, 0)
+    box.Thickness = 2
+    box.Filled = false
+    box.Visible = false
+    Boxes[plr] = box
+
+    local line = Drawing.new("Line")
+    line.Color = Color3.fromRGB(255, 255, 0)
+    line.Thickness = 2
+    line.Visible = false
+    Lines[plr] = line
+end
+
+local function removeESP(plr)
+    if Boxes[plr] then Boxes[plr]:Remove() Boxes[plr]=nil end
+    if Lines[plr] then Lines[plr]:Remove() Lines[plr]=nil end
+end
+
+for _, plr in ipairs(Players:GetPlayers()) do
+    if plr ~= LocalPlayer then createESP(plr) end
+end
+
+Players.PlayerAdded:Connect(function(plr)
+    if plr ~= LocalPlayer then createESP(plr) end
+end)
+
+Players.PlayerRemoving:Connect(removeESP)
+
+
+RunService.RenderStepped:Connect(function()
+    for plr, box in pairs(Boxes) do
+        local line = Lines[plr]
+        local char = plr.Character
+        
+        if not char 
+           or not char:FindFirstChild("HumanoidRootPart")
+           or not char:FindFirstChild("Humanoid")
+           or char.Humanoid.Health <= 0
+           or sameTeam(plr)
+        then
+            box.Visible = false
+            line.Visible = false
+            continue
+        end
+
+        local hrp = char.HumanoidRootPart
+        local pos, vis = Camera:WorldToViewportPoint(hrp.Position)
+
+        if not vis then
+            box.Visible = false
+            line.Visible = false
+            continue
+        end
+
+        -- box
+        local dist = (Camera.CFrame.Position - hrp.Position).Magnitude
+        local scale = math.clamp(2/dist, 0.3, 1.5)
+        local h = 4 * scale * 50
+        local w = 2 * scale * 50
+
+        box.Size = Vector2.new(w*2, h*2)
+        box.Position = Vector2.new(pos.X - w, pos.Y - h)
+        box.Visible = true
+
+        -- line (tracer)
+        line.From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y - 10)
+        line.To = Vector2.new(pos.X, pos.Y)
+        line.Visible = true
+    end
+end)
+
+---------------------------------------------------------
+-- NOCLIP (HOLD N)
+---------------------------------------------------------
+
+local noclip = false
+game:GetService("UserInputService").InputBegan:Connect(function(i, g)
+    if g then return end
+    if i.KeyCode == Enum.KeyCode.N then
+        noclip = not noclip
+    end
+end)
+
+RunService.Stepped:Connect(function()
+    if noclip and LocalPlayer.Character then
+        for _, v in pairs(LocalPlayer.Character:GetChildren()) do
+            if v:IsA("BasePart") then
+                v.CanCollide = false
+            end
+        end
+    end
+end)
+
+---------------------------------------------------------
+-- FAST RELOAD (INSTANT RELOAD)
+---------------------------------------------------------
+
+for _, tool in ipairs(LocalPlayer.Backpack:GetChildren()) do
+    if tool:FindFirstChild("ReloadTime") then
+        tool.ReloadTime.Value = 0
+    end
+end
+
+LocalPlayer.Backpack.ChildAdded:Connect(function(tool)
+    task.wait(0.1)
+    if tool:FindFirstChild("ReloadTime") then
+        tool.ReloadTime.Value = 0
+    end
+end)
+
+--// END F
+-- Silent V1
+local players = game:GetService("Players");
+local teams = game:GetService("Teams");
+
+-- variables(Sua lam Cho)
+local camera = workspace.CurrentCamera;
+local get_closest_player = function()
+    local closest = nil;
+    local closest_distance = math.huge;
+
+    for _, character in workspace.GetChildren(workspace) do
+        local player = players.FindFirstChild(players, character.Name);
+        local root_part = character.FindFirstChild(character, "HumanoidRootPart");
+
+        if (not player) or (not root_part) then
+            continue;
+        end
+
+        local team_attribute = player.GetAttribute(player, "Team");
+
+        if (not team_attribute) then
+            continue;
+        end
+
+        if (teams[team_attribute] == players.LocalPlayer.Team) then
+            continue;
+        end
+
+        local position, on_screen = camera.WorldToViewportPoint(camera, root_part.Position);
+
+        if (not on_screen) then
+            continue;
+        end
+
+        local center = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2);
+        local distance = (Vector2.new(position.X, position.Y) - center).Magnitude;
+
+        if (closest_distance > distance) then
+            closest = character;
+            closest_distance = distance;
+        end
+    end
+
+    return closest;
+end
+
+-- main
+do
+    local events = { -- only a table incase you wanna add more events, its really easy
+        ["ShootEvent"] = function(arg)
+            return (typeof(arg) == "Instance" and arg.Name and (string.find(arg.Name, players.LocalPlayer.Name))); -- dumb method for checking if the shooter is lplr, but none of the other ones seemed to work... (?, might've been tweaking, feel free to try it)
+        end,
+    };
+
+    old_namecall = hookmetamethod(game, "__namecall", function(self, caller, message, ...)
+        local method = getnamecallmethod();
+
+        if (method == "Fire" and self.Name == "Sync") then -- intercept actor communication for 1337 haxx.. (so we can log all events being sent to the actor)
+            for event, identify in events do
+                if (event == "ShootEvent" and identify(message)) then
+                    local closest_player = get_closest_player();
+                    local ammo, cframe, id, weapon, projectile = ...;
+
+                    if (closest_player and closest_player.FindFirstChild(closest_player, "Head")) then
+                        cframe = closest_player.Head.CFrame; -- HEAT manipulation...
+                    end
+
+                    return old_namecall(self, caller, message, ammo, cframe, id, weapon, projectile, ...);
+                end
+            end
+        end
+
+        return old_namecall(self, caller, message, ...);
+    end)
+end
