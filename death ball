@@ -23,7 +23,7 @@ local LastParryTime = 0
 local ParryCooldown = 0.000001
 local IsParrying = false
 
-
+-- Настраиваемые пороги скорости и высоты
 local SpeedHeightThresholds = {
     {speed = 7.5, maxHeight = 22},
     {speed = 10, maxHeight = 27},
@@ -38,7 +38,7 @@ local AutoIntermissionEnabled = false
 local LastIntermissionCheck = 0
 local IntermissionCheckCooldown = 2
 
-
+-- Бинды по умолчанию
 local Binds = {
     ToggleGUI = Enum.KeyCode.K,
     AutoParry = nil,
@@ -52,7 +52,7 @@ local Binds = {
 local BindingInProgress = false
 local CurrentBindingButton = nil
 
-
+-- Переменные для Target системы
 local TargetEnabled = false
 local currentTarget = nil
 local currentRadius = 45
@@ -65,7 +65,7 @@ local noclipEnabled = false
 local noclipConnection = nil
 local isInGame = false
 
-
+-- Переменные для HVH системы
 local HVHEnabled = false
 local HVHVisualBall = nil
 local HVHConnection = nil
@@ -75,6 +75,7 @@ local LastBallColor = WhiteColor
 local BallVelocity = Vector3.new(0, 0, 0)
 local LastBallPosForVelocity = nil
 
+-- Цвета для фиолетового градиента
 local PurpleGradient = {
     Color3.fromRGB(100, 50, 200),
     Color3.fromRGB(150, 70, 250),
@@ -116,7 +117,7 @@ local function GetBallColor()
     return WhiteColor
 end
 
-
+-- Функция для расчета высоты мяча по размеру тени (всегда +3 к расчету)
 local function CalculateBallHeight(shadowSize)
     local baseShadowSize = 5
     local heightMultiplier = 20
@@ -124,24 +125,26 @@ local function CalculateBallHeight(shadowSize)
     local shadowIncrease = math.max(0, shadowSize - baseShadowSize)
     local estimatedHeight = shadowIncrease * heightMultiplier
     
-  
+    -- Всегда добавляем +3 к высоте мяча
     return math.min(estimatedHeight + 3, 100)
 end
 
+-- Функция для создания визуального мяча (без пульсации)
 local function CreateVisualBall(shadowPosition, shadowSize)
     if not shadowPosition then return nil end
     
-
+    -- Удаляем старый мяч если есть
     if HVHVisualBall then
         HVHVisualBall:Destroy()
         HVHVisualBall = nil
     end
-  
+    
+    -- Вычисляем высоту мяча с учетом +3
     local ballHeight = CalculateBallHeight(shadowSize)
     local ballYPosition = shadowPosition.Y + ballHeight
     local ballPosition = Vector3.new(shadowPosition.X, ballYPosition, shadowPosition.Z)
     
-
+    -- Создаем новый визуальный мяч с размером 4,4,4
     HVHVisualBall = Instance.new("Part")
     HVHVisualBall.Name = "VisualBallTracker"
     HVHVisualBall.Anchored = true
@@ -154,7 +157,7 @@ local function CreateVisualBall(shadowPosition, shadowSize)
     HVHVisualBall.Position = ballPosition
     HVHVisualBall.Parent = workspace
     
-
+    -- Добавляем яркое свечение без пульсации
     local highlight = Instance.new("Highlight")
     highlight.FillColor = AccentColor
     highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
@@ -165,14 +168,14 @@ local function CreateVisualBall(shadowPosition, shadowSize)
     return HVHVisualBall, ballPosition
 end
 
-
+-- Функция для обновления позиции визуального мяча
 local function UpdateVisualBall(shadowPosition, shadowSize)
     if not shadowPosition then return nil end
     
     if not HVHVisualBall then
         return CreateVisualBall(shadowPosition, shadowSize)
     else
-
+        -- Вычисляем новую позицию с учетом +3
         local ballHeight = CalculateBallHeight(shadowSize)
         local ballYPosition = shadowPosition.Y + ballHeight
         local ballPosition = Vector3.new(shadowPosition.X, ballYPosition, shadowPosition.Z)
@@ -182,7 +185,7 @@ local function UpdateVisualBall(shadowPosition, shadowSize)
     end
 end
 
-
+-- Функция для удаления визуального мяча
 local function RemoveVisualBall()
     if HVHVisualBall then
         HVHVisualBall:Destroy()
@@ -190,7 +193,7 @@ local function RemoveVisualBall()
     end
 end
 
-
+-- Функция для выполнения HVH с новой логикой
 local function ExecuteHVH(shadowPosition, shadowSize)
     if not HVHEnabled or not IsInGame() or not shadowPosition then
         HVHState = "WAITING"
@@ -198,36 +201,38 @@ local function ExecuteHVH(shadowPosition, shadowSize)
         return
     end
     
-
+    -- Получаем цвет мяча
     local ballColor = WhiteColor
     if RealBall then
         ballColor = GetBallColor()
     end
     
-
+    -- Сохраняем текущий цвет мяча
     LastBallColor = ballColor
     
-
+    -- Обновляем визуальный мяч
     local ballPosition = UpdateVisualBall(shadowPosition, shadowSize)
     if not ballPosition then return end
-
+    
+    -- Вычисляем высоту мяча
     local ballHeight = CalculateBallHeight(shadowSize)
     local ballYPosition = shadowPosition.Y + ballHeight
     ballPosition = Vector3.new(shadowPosition.X, ballYPosition, shadowPosition.Z)
     
-
+    -- Вычисляем скорость мяча
     local ballSpeed = BallVelocity.Magnitude
     
- 
+    -- Если мяч не белый и скорость равна 0, не выполняем HVH
     if ballColor ~= WhiteColor and ballSpeed < 0.1 then
         HVHState = "WAITING"
         return
     end
     
-
+    -- Логика состояний HVH
     if HVHState == "WAITING" then
- 
+        -- Ждем пока мяч станет не белым и имеет скорость больше 0
         if ballColor ~= WhiteColor and ballSpeed > 0.1 then
+            -- Сохраняем оригинальную позицию
             if LP.Character and LP.Character.PrimaryPart then
                 OriginalHVHPosition = LP.Character.PrimaryPart.Position
                 HVHState = "TELEPORTING"
@@ -235,40 +240,41 @@ local function ExecuteHVH(shadowPosition, shadowSize)
         end
         
     elseif HVHState == "TELEPORTING" then
-        
+        -- Нажимаем F
         VirtualInputManager:SendKeyEvent(true, "F", false, game)
         task.wait(0.000001)
         VirtualInputManager:SendKeyEvent(false, "F", false, game)
         
-        
+        -- Уменьшенная задержка до 0.000001
         task.wait(0.000001)
         
+        -- Телепортируемся прямо в мяч
         if LP.Character and LP.Character.PrimaryPart then
             LP.Character.PrimaryPart.CFrame = CFrame.new(ballPosition)
             HVHState = "FOLLOWING"
         end
         
     elseif HVHState == "FOLLOWING" then
-        
+        -- Проверяем, стал ли мяч белым или скорость стала 0
         if ballColor == WhiteColor or ballSpeed < 0.1 then
             HVHState = "RETURNING"
             return
         end
         
-        
+        -- Находимся прямо в мяче
         if LP.Character and LP.Character.PrimaryPart then
             LP.Character.PrimaryPart.CFrame = CFrame.new(ballPosition)
         end
         
     elseif HVHState == "RETURNING" then
-       
+        -- Возвращаемся в исходную позицию
         if OriginalHVHPosition and LP.Character and LP.Character.PrimaryPart then
             LP.Character.PrimaryPart.CFrame = CFrame.new(OriginalHVHPosition)
             
-          
+            -- Уменьшенная задержка до 0.000001
             task.wait(0.000001)
             
-            
+            -- Возвращаемся в состояние ожидания
             HVHState = "WAITING"
             OriginalHVHPosition = nil
         else
@@ -277,7 +283,7 @@ local function ExecuteHVH(shadowPosition, shadowSize)
     end
 end
 
-
+-- Функция для запуска/остановки постоянной работы HVH
 local function ToggleHVHContinuous()
     if HVHConnection then
         HVHConnection:Disconnect()
@@ -285,6 +291,7 @@ local function ToggleHVHContinuous()
     end
     
     if HVHEnabled then
+        -- Сбрасываем состояние HVH
         HVHState = "WAITING"
         OriginalHVHPosition = nil
         LastBallColor = WhiteColor
@@ -293,6 +300,7 @@ local function ToggleHVHContinuous()
             if BallShadow then
                 ExecuteHVH(BallShadow.Position, BallShadow.Size.X)
             else
+                -- Если мяч не найден, возвращаемся в состояние ожидания
                 if HVHState ~= "WAITING" then
                     HVHState = "WAITING"
                     OriginalHVHPosition = nil
@@ -300,7 +308,7 @@ local function ToggleHVHContinuous()
             end
         end)
     else
-
+        -- Выключаем HVH, сбрасываем состояние
         HVHState = "WAITING"
         OriginalHVHPosition = nil
         LastBallColor = WhiteColor
@@ -480,6 +488,7 @@ local function GetMaxHeightBySpeed(speedStuds)
     return 30
 end
 
+-- Функция для получения названия клавиши
 local function GetKeyName(keyCode)
     if not keyCode then return "NONE" end
     local keyName = tostring(keyCode):gsub("Enum.KeyCode.", "")
@@ -492,6 +501,7 @@ local function GetKeyName(keyCode)
     else return keyName end
 end
 
+-- Функция для обновления текста кнопок с биндами
 local function UpdateButtonText(button, baseText, bindKey)
     if bindKey then
         button.Text = baseText .. " (" .. GetKeyName(bindKey) .. ")"
@@ -500,6 +510,7 @@ local function UpdateButtonText(button, baseText, bindKey)
     end
 end
 
+-- Функция для установки бинда
 local function StartBinding(button, bindType, baseText)
     if BindingInProgress then return end
     
@@ -520,6 +531,7 @@ local function StartBinding(button, bindType, baseText)
             
             UpdateButtonText(button, baseText, input.KeyCode)
             
+            -- Устанавливаем цвет в зависимости от состояния функции
             if bindType == "AutoParry" then
                 button.BackgroundColor3 = AutoParryEnabled and Color3.fromRGB(100, 255, 100) or Color3.fromRGB(255, 100, 100)
             elseif bindType == "Clicker" then
@@ -551,6 +563,7 @@ local function StartBinding(button, bindType, baseText)
     end)
 end
 
+-- Функции для Target системы
 local function toggleNoclip(state)
     if noclipConnection then
         noclipConnection:Disconnect()
@@ -589,6 +602,7 @@ local function toggleNoclip(state)
     end
 end
 
+-- Оптимизированный поиск ближайшего игрока НИЖЕ максимальной высоты
 local lastPlayerSearch = 0
 local playerSearchInterval = 0.5
 local cachedPlayers = {}
@@ -635,6 +649,7 @@ local function findNearestPlayerBelowHeight()
     return nil
 end
 
+-- Проверка высоты текущей цели
 local function checkCurrentTargetHeight()
     if not currentTarget or not currentTarget.Character then
         return false
@@ -651,6 +666,7 @@ local function checkCurrentTargetHeight()
     return false
 end
 
+-- Функция для вычисления позиции вращения
 local function getRotatedPosition(targetPosition, angle, radius)
     local offset = Vector3.new(
         math.cos(angle) * radius,
@@ -665,6 +681,7 @@ local function getRotatedPosition(targetPosition, angle, radius)
     )
 end
 
+-- Оптимизированная основная функция Target
 local function targetFunctionOptimized()
     if targetConnection then
         targetConnection:Disconnect()
@@ -751,6 +768,7 @@ local function targetFunctionOptimized()
     end)
 end
 
+-- Функция включения/выключения Target
 local function ToggleTarget()
     if not IsInGame() then
         return
@@ -776,7 +794,7 @@ local function ToggleTarget()
     end
 end
 
-
+-- Функция для переключения HVH
 local function ToggleHVH()
     HVHEnabled = not HVHEnabled
     
