@@ -1,7 +1,6 @@
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 local VirtualInputManager = game:GetService("VirtualInputManager")
-local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
 local LP = game.Players.LocalPlayer
@@ -50,8 +49,7 @@ local Binds = {
 }
 
 local BindingInProgress = false
-local CurrentBindingButton = nil
-
+local BindingInProgress = false
 -- Переменные для Target системы
 local TargetEnabled = false
 local currentTarget = nil
@@ -68,14 +66,13 @@ local isInGame = false
 -- Переменные для HVH системы
 local HVHEnabled = false
 local HVHVisualBall = nil
+local HVHEnabled = false
+local HVHVisualBall = nil
 local HVHConnection = nil
 local OriginalHVHPosition = nil
 local HVHState = "WAITING"
-local LastBallColor = WhiteColor
 local BallVelocity = Vector3.new(0, 0, 0)
 local LastBallPosForVelocity = nil
-
--- Цвета для фиолетового градиента
 local PurpleGradient = {
     Color3.fromRGB(100, 50, 200),
     Color3.fromRGB(150, 70, 250),
@@ -211,9 +208,6 @@ local function ExecuteHVH(shadowPosition, shadowSize)
     LastBallColor = ballColor
     
     -- Обновляем визуальный мяч
-    local ballPosition = UpdateVisualBall(shadowPosition, shadowSize)
-    if not ballPosition then return end
-    
     -- Вычисляем высоту мяча
     local ballHeight = CalculateBallHeight(shadowSize)
     local ballYPosition = shadowPosition.Y + ballHeight
@@ -291,24 +285,14 @@ local function ToggleHVHContinuous()
     end
     
     if HVHEnabled then
-        -- Сбрасываем состояние HVH
         HVHState = "WAITING"
         OriginalHVHPosition = nil
         LastBallColor = WhiteColor
         
         HVHConnection = RunService.Heartbeat:Connect(function()
-            if BallShadow then
-                ExecuteHVH(BallShadow.Position, BallShadow.Size.X)
-            else
-                -- Если мяч не найден, возвращаемся в состояние ожидания
-                if HVHState ~= "WAITING" then
-                    HVHState = "WAITING"
-                    OriginalHVHPosition = nil
-                end
-            end
+            -- HVH execution loop
         end)
     else
-        -- Выключаем HVH, сбрасываем состояние
         HVHState = "WAITING"
         OriginalHVHPosition = nil
         LastBallColor = WhiteColor
@@ -317,9 +301,6 @@ local function ToggleHVHContinuous()
 end
 
 local function CreatePlayerCoordsGUI()
-    if PlayerCoordsGui then
-        PlayerCoordsGui:Destroy()
-    end
     
     PlayerCoordsGui = Instance.new("ScreenGui")
     PlayerCoordsGui.Name = "PlayerCoordsGUI"
@@ -378,22 +359,22 @@ local function CreatePlayerCoordsGUI()
         end
     end)
     
+    CoordsTitle.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            startPos = CoordsFrame.Position
+        end
+    end)
+
     CoordsTitle.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseMovement then
-            if dragging then
+            if dragging and startPos and dragStart then
                 local delta = input.Position - dragStart
                 CoordsFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
             end
         end
     end)
-    
-    CoordsTitle.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = false
-        end
-    end)
-end
-
 local function UpdatePlayerCoordinates()
     if not PlayerCoordsLabel then
         return
@@ -522,57 +503,33 @@ local function StartBinding(button, bindType, baseText)
     button.BackgroundColor3 = AccentColor
     button.TextColor3 = DarkTextColor
     
-    local connection
-    connection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
-        if gameProcessed then return end
-        
+local function StartBinding(button, bindType, baseText)
+    if BindingInProgress then return end
+    
+    BindingInProgress = true
+    
+    button.Text = "Press any key..."
+    button.BackgroundColor3 = AccentColor
+    button.TextColor3 = DarkTextColor
+    
+    local connection = UserInputService.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.Keyboard then
             Binds[bindType] = input.KeyCode
-            
             UpdateButtonText(button, baseText, input.KeyCode)
-            
-            -- Устанавливаем цвет в зависимости от состояния функции
-            if bindType == "AutoParry" then
-                button.BackgroundColor3 = AutoParryEnabled and Color3.fromRGB(100, 255, 100) or Color3.fromRGB(255, 100, 100)
-            elseif bindType == "Clicker" then
-                button.BackgroundColor3 = AutoClickerEnabled and Color3.fromRGB(100, 255, 100) or Color3.fromRGB(255, 100, 100)
-            elseif bindType == "Target" then
-                button.BackgroundColor3 = TargetEnabled and Color3.fromRGB(100, 255, 100) or Color3.fromRGB(255, 100, 100)
-            elseif bindType == "HVH" then
-                button.BackgroundColor3 = HVHEnabled and Color3.fromRGB(100, 255, 100) or Color3.fromRGB(255, 100, 100)
-            elseif bindType == "AutoInter" then
-                button.BackgroundColor3 = AutoIntermissionEnabled and Color3.fromRGB(100, 255, 100) or Color3.fromRGB(255, 100, 100)
-            else
-                button.BackgroundColor3 = PurpleGradient[2]
-            end
-            
+            button.BackgroundColor3 = PurpleGradient[2]
             button.TextColor3 = DarkTextColor
             BindingInProgress = false
-            CurrentBindingButton = nil
             connection:Disconnect()
         elseif input.UserInputType == Enum.UserInputType.MouseButton1 then
             Binds[bindType] = nil
             UpdateButtonText(button, baseText, nil)
             button.BackgroundColor3 = PurpleGradient[2]
             button.TextColor3 = DarkTextColor
-            
             BindingInProgress = false
-            CurrentBindingButton = nil
             connection:Disconnect()
         end
     end)
 end
-
--- Функции для Target системы
-local function toggleNoclip(state)
-    if noclipConnection then
-        noclipConnection:Disconnect()
-        noclipConnection = nil
-    end
-    
-    if state then
-        noclipEnabled = true
-        
         if LP.Character then
             for _, part in pairs(LP.Character:GetDescendants()) do
                 if part:IsA("BasePart") then
@@ -1137,22 +1094,22 @@ function InitializeMainScript()
 
     TitleBar.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseMovement then
-            if dragging then
+    TitleBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            startPos = MainFrame.Position
+        end
+    end)
+
+    TitleBar.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement then
+            if dragging and startPos and dragStart then
                 local delta = input.Position - dragStart
                 MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
             end
         end
     end)
-
-    TitleBar.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = false
-        end
-    end)
-
-    local function ToggleAutoIntermission()
-        AutoIntermissionEnabled = not AutoIntermissionEnabled
-        
         if AutoIntermissionEnabled then
             StatusLabel.Text = "🏠 Auto Intermission enabled"
             buttonInstances.AutoInter.BackgroundColor3 = Color3.fromRGB(100, 255, 100)
@@ -1168,25 +1125,26 @@ function InitializeMainScript()
         local nearestPlayer = FindNearestPlayer()
         if nearestPlayer then
             if TeleportToPlayer(nearestPlayer) then
-                StatusLabel.Text = "📍 Teleported to " .. nearestPlayer.Name
-            else
-                StatusLabel.Text = "📍 Teleport failed"
-            end
-        else
-            StatusLabel.Text = "📍 No players found"
+    TitleBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            startPos = MainFrame.Position
         end
-    end
-
-    buttonInstances.AutoParry.MouseButton2Click:Connect(function()
-        StartBinding(buttonInstances.AutoParry, "AutoParry", "🛡️ Auto" .. (AutoParryEnabled and "-ON" or "-OFF"))
     end)
 
-    buttonInstances.Clicker.MouseButton2Click:Connect(function()
-        StartBinding(buttonInstances.Clicker, "Clicker", "⚡ Clicker" .. (AutoClickerEnabled and " ON" or " OFF"))
+    TitleBar.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement then
+            if dragging and startPos and dragStart then
+                local delta = input.Position - dragStart
+                MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+            end
+        end
     end)
 
-    buttonInstances.Target.MouseButton2Click:Connect(function()
-        StartBinding(buttonInstances.Target, "Target", "🎯 Target" .. (TargetEnabled and " ON" or " OFF"))
+    local function ToggleAutoIntermission()
+        AutoIntermissionEnabled = not AutoIntermissionEnabled
+        if AutoIntermissionEnabled then
     end)
 
     buttonInstances.HVH.MouseButton2Click:Connect(function()
@@ -1261,21 +1219,46 @@ function InitializeMainScript()
             local sliderAbsPos = slider.AbsolutePosition
             local sliderAbsSize = slider.AbsoluteSize
             
+    local function SetupSliderDrag(slider, thumb, _, callback, minValue, maxValue, defaultValue)
+        local dragging = false
+
+        local function updateFromMouse()
+            if not dragging then return end
+
+            local mousePos = UserInputService:GetMouseLocation()
+            local sliderAbsPos = slider.AbsolutePosition
+            local sliderAbsSize = slider.AbsoluteSize
+
             local relativeX = (mousePos.X - sliderAbsPos.X) / sliderAbsSize.X
             relativeX = math.clamp(relativeX, 0, 1)
-            
+
             local value = minValue + (relativeX * (maxValue - minValue))
             callback(value)
         end
-        
-        thumb.InputBegan:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 then
                 dragging = true
+                updateFromMouse()
                 thumb.BackgroundColor3 = AccentColor
             end
         end)
         
-        slider.InputBegan:Connect(function(input)
+    local function SetupSliderDrag(slider, thumb, callback, minValue, maxValue, defaultValue)
+        local dragging = false
+
+        local function updateFromMouse()
+            if not dragging then return end
+
+            local mousePos = UserInputService:GetMouseLocation()
+            local sliderAbsPos = slider.AbsolutePosition
+            local sliderAbsSize = slider.AbsoluteSize
+
+            local relativeX = (mousePos.X - sliderAbsPos.X) / sliderAbsSize.X
+            relativeX = math.clamp(relativeX, 0, 1)
+
+            local value = minValue + (relativeX * (maxValue - minValue))
+            callback(value)
+        end
+
+        thumb.InputBegan:Connect(function(input)
             if input.UserInputType == Enum.UserInputType.MouseButton1 then
                 dragging = true
                 updateFromMouse()
@@ -1295,11 +1278,6 @@ function InitializeMainScript()
                 thumb.BackgroundColor3 = TextColor
             end
         end)
-        
-        if defaultValue then
-            local relativeValue = (defaultValue - minValue) / (maxValue - minValue)
-            callback(defaultValue)
-        end
     end
 
     local function UpdateDistanceSlider(value)
@@ -1311,38 +1289,6 @@ function InitializeMainScript()
     end
 
     local function UpdateTargetRadiusSlider(value)
-        currentRadius = value
-        local relativeValue = (value - 40) / 960
-        TargetRadiusFill.Size = UDim2.new(relativeValue, 0, 1, 0)
-        TargetRadiusThumb.Position = UDim2.new(relativeValue, -9, -0.25, 0)
-        TargetRadiusLabel.Text = "🎯 Target Radius: " .. math.floor(value)
-    end
-
-    local function UpdateTargetSpeedSlider(value)
-        rotationSpeed = value
-        local relativeValue = (value - 0.5) / 49.5
-        TargetSpeedFill.Size = UDim2.new(relativeValue, 0, 1, 0)
-        TargetSpeedThumb.Position = UDim2.new(relativeValue, -9, -0.25, 0)
-        TargetSpeedLabel.Text = "🎯 Target Speed: " .. string.format("%.1f", value)
-    end
-
-    SetupSliderDrag(DistanceSlider, DistanceThumb, DistanceFill, UpdateDistanceSlider, 5, 25, 15)
-    SetupSliderDrag(TargetRadiusSlider, TargetRadiusThumb, TargetRadiusFill, UpdateTargetRadiusSlider, 40, 1000, 45)
-    SetupSliderDrag(TargetSpeedSlider, TargetSpeedThumb, TargetSpeedFill, UpdateTargetSpeedSlider, 0.5, 50, 2)
-
-    UserInputService.InputBegan:Connect(function(input, gameProcessed)
-        if gameProcessed then return end
-        
-        if input.KeyCode == Binds.ToggleGUI then
-            MainFrame.Visible = not MainFrame.Visible
-        
-        elseif input.KeyCode == Binds.Clicker then
-            AutoClickerEnabled = not AutoClickerEnabled
-            buttonInstances.Clicker.BackgroundColor3 = AutoClickerEnabled and Color3.fromRGB(100, 255, 100) or Color3.fromRGB(255, 100, 100)
-            UpdateButtonText(buttonInstances.Clicker, "⚡ Clicker" .. (AutoClickerEnabled and " ON" or " OFF"), Binds.Clicker)
-        
-        elseif input.KeyCode == Binds.Target then
-            ToggleTarget()
             if TargetEnabled then
                 StatusLabel.Text = "🎯 Targeting enabled"
                 buttonInstances.Target.BackgroundColor3 = Color3.fromRGB(100, 255, 100)
@@ -1433,21 +1379,21 @@ function InitializeMainScript()
             optimalDistance = optimalDistance * 1.3
         elseif speed > 6 then
             optimalDistance = optimalDistance * 1.2
+    local function CalculateOptimalParryDistance(speed, _, _, _, _)
+        local baseDistance = ParryDistance
+        local reactionDistance = speed * ReactionTime * SafetyMargin
+        local optimalDistance = baseDistance + reactionDistance
+
+        if speed > 20 then
+            optimalDistance = optimalDistance * 1.4
+        elseif speed > 12 then
+            optimalDistance = optimalDistance * 1.3
+        elseif speed > 6 then
+            optimalDistance = optimalDistance * 1.2
         end
-        
+
         return optimalDistance
     end
-
-    coroutine.wrap(function()
-        while true do
-            UpdatePlayerCoordinates()
-            wait(0.1)
-        end
-    end)()
-
-    coroutine.wrap(function()
-        while true do
-            CheckAutoIntermission()
             wait(1)
         end
     end)()
@@ -1465,35 +1411,21 @@ function InitializeMainScript()
             
             if not BallShadow then
                 BallShadow = game.Workspace.FX:FindFirstChild("BallShadow")
-            end
-            
-            if not RealBall then
-                RealBall = workspace:FindFirstChild("Ball") or workspace:FindFirstChild("Part")
-            end
-            
-            if BallShadow then
-                if not LastBallPos then
-                    LastBallPos = BallShadow.Position
-                    LastBallPosForVelocity = BallShadow.Position
-                    StatusLabel.Text = "🎯 Ball found"
-                    
-                    UpdateVisualBall(BallShadow.Position, BallShadow.Size.X)
-                end
-            else
-                StatusLabel.Text = "🔍 Searching for ball..."
-            end
-            
-            if BallShadow and (not BallShadow.Parent) then
-                StatusLabel.Text = "⚠️ Ball removed"
-                BallShadow = nil
-                RealBall = nil
-            end
-            
-            if BallShadow and LP.Character and LP.Character.PrimaryPart then
-                local BallPos = BallShadow.Position
-                local PlayerPos = LP.Character.PrimaryPart.Position
-                
-                if not LastBallPos then 
+    local function CalculateOptimalParryDistance(speed)
+        local baseDistance = ParryDistance
+        local reactionDistance = speed * ReactionTime * SafetyMargin
+        local optimalDistance = baseDistance + reactionDistance
+
+        if speed > 20 then
+            optimalDistance = optimalDistance * 1.4
+        elseif speed > 12 then
+            optimalDistance = optimalDistance * 1.3
+        elseif speed > 6 then
+            optimalDistance = optimalDistance * 1.2
+        end
+
+        return optimalDistance
+    end
                     LastBallPos = BallPos 
                 end
 
@@ -1518,9 +1450,8 @@ function InitializeMainScript()
                 if RealBall then
                     ballColor = GetBallColor()
                 end
-                local isBallWhite = ballColor == WhiteColor
-                
-                local maxHeightForParry = GetMaxHeightBySpeed(speedStuds)
+                local moveDir = (LastBallPos - BallPos)
+                local horizontalSpeed = Vector3.new(moveDir.X, 0, moveDir.Z).Magnitude
                 
                 local isComingTowardsPlayer = IsBallComingTowardsPlayer(BallPos, LastBallPos, PlayerPos)
                 local optimalDistance = CalculateOptimalParryDistance(speedStuds, horizontalDistance, ballHeight, PlayerPos.Y, ballPosY)
@@ -1559,4 +1490,36 @@ function InitializeMainScript()
     end)()
 end
 
-InitializeMainScript()
+InitializeMainScript()                local moveDir = (LastBallPos - BallPos)
+                local horizontalSpeed = Vector3.new(moveDir.X, 0, moveDir.Z).Magnitude
+                local speedStuds = (horizontalSpeed + 0.25) * SpeedMulty
+                
+                local horizontalDistance = (Vector3.new(PlayerPos.X, 0, PlayerPos.Z) - Vector3.new(BallPos.X, 0, BallPos.Z)).Magnitude
+                
+                local ballColor = WhiteColor
+                if RealBall then
+                    ballColor = GetBallColor()
+                end
+                
+                local isComingTowardsPlayer = IsBallComingTowardsPlayer(BallPos, LastBallPos, PlayerPos)
+                local optimalDistance = CalculateOptimalParryDistance(speedStuds)
+                local maxHeightForParry = GetMaxHeightBySpeed(speedStuds)
+                local isBallWhite = (ballColor == WhiteColor)
+                
+                CoordinatesLabel.Text = string.format("X: %.1f | Y: %.1f | Z: %.1f\nSpeed: %.1f | Height: %.1f",
+                    BallPos.X, ballPosY, BallPos.Z, speedStuds, ballHeight)
+                
+                if isBallWhite then
+                    StatusLabel.Text = "✅ White ball - safe"
+                else
+                    StatusLabel.Text = "⚠️ Dangerous - MaxH: " .. maxHeightForParry
+                end
+                
+                UpdateVisualBall(BallPos, currentShadowSize)
+                
+                local currentTime = tick()
+                if AutoParryEnabled and currentTime - LastParryCheckTime > ParryCheckCooldown then
+                    local shouldParryNow = horizontalDistance <= optimalDistance
+                        and isComingTowardsPlayer
+                        and ballHeight <= maxHeightForParry
+                        and not isBallWhite
