@@ -1,0 +1,187 @@
+--//=====================================================
+--// LT.ModzVN | Aimbot + ESP + SILENT AIM (Mercury UI)
+--//=====================================================
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+
+local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+
+--//======================
+--// Mercury UI Init
+--//======================
+local Mercury = loadstring(game:HttpGet("https://raw.githubusercontent.com/deeeity/mercury-lib/master/src.lua"))()
+local GUI = Mercury:create{
+    Name = "LT.ModzVN - Silent Aim",
+    Size = UDim2.fromOffset(600, 420),
+    Theme = Mercury.Themes.Dark
+}
+
+--//======================
+--// Global Settings
+--//======================
+local Settings = {
+    SilentAim = false,
+    FOV = 150,
+    ShowFOV = true,
+    AimPart = "Head",
+    TeamCheck = true,
+    WallCheck = true,
+    FOVColor = Color3.fromRGB(0, 255, 255)
+}
+
+local ESP_Config = {
+    Enabled = false,
+    Boxes = true,
+    Names = true
+}
+
+--//======================
+--// FOV Circle
+--//======================
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Thickness = 1
+FOVCircle.NumSides = 100
+FOVCircle.Filled = false
+FOVCircle.Visible = false
+
+--//======================
+--// Utils (Đã sửa lỗi Syntax)
+--//======================
+local function IsAlive(plr)
+    return plr.Character and plr.Character:FindFirstChild("Humanoid") and plr.Character.Humanoid.Health > 0
+end
+
+local function GetClosestTarget()
+    local closest, shortest = nil, math.huge
+    local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer and IsAlive(plr) then
+            -- Team Check
+            if Settings.TeamCheck and plr.Team == LocalPlayer.Team then
+                -- skip
+            else
+                local char = plr.Character
+                local part = char:FindFirstChild(Settings.AimPart)
+                if part then
+                    local pos, onScreen = Camera:WorldToViewportPoint(part.Position)
+                    if onScreen then
+                        local dist = (Vector2.new(pos.X, pos.Y) - center).Magnitude
+                        if dist < shortest and dist <= Settings.FOV then
+                            -- Wall Check
+                            local allowed = true
+                            if Settings.WallCheck then
+                                local ray = Ray.new(Camera.CFrame.Position, (part.Position - Camera.CFrame.Position).Unit * 500)
+                                local hit = workspace:FindPartOnRayWithIgnoreList(ray, {LocalPlayer.Character})
+                                if not (hit and hit:IsDescendantOf(char)) then
+                                    allowed = false
+                                end
+                            end
+
+                            if allowed then
+                                shortest = dist
+                                closest = part
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return closest
+end
+
+--//======================
+--// SILENT AIM HOOK (Core)
+--//======================
+local old_namecall
+old_namecall = hookmetamethod(game, "__namecall", function(self, ...)
+    local args = {...}
+    local method = getnamecallmethod()
+
+    if Settings.SilentAim then
+        -- Loại 1: Remote thường (FireServer)
+        if method == "FireServer" and tostring(self):lower():find("shoot") then
+            local target = GetClosestTarget()
+            if target then
+                args[2] = target.CFrame -- Thay đổi mục tiêu bắn
+                return old_namecall(self, unpack(args))
+            end
+        end
+        
+        -- Loại 2: Hệ thống Sync (Thường dùng cho các game phức tạp)
+        if method == "Fire" and self.Name == "Sync" then
+            local target = GetClosestTarget()
+            if target then
+                args[2] = target.CFrame
+                return old_namecall(self, unpack(args))
+            end
+        end
+    end
+
+    return old_namecall(self, ...)
+end)
+
+--//======================
+--// UI Tabs
+--//======================
+local MainTab = GUI:tab{ Name = "Combat", Icon = "rbxassetid://6023426926" }
+local ESPTab = GUI:tab{ Name = "Visuals", Icon = "rbxassetid://6031763426" }
+
+MainTab:toggle{
+    Name = "Enable Silent Aim",
+    StartingState = false,
+    Callback = function(v) Settings.SilentAim = v end
+}
+
+MainTab:toggle{
+    Name = "Show FOV Circle",
+    StartingState = true,
+    Callback = function(v) Settings.ShowFOV = v end
+}
+
+MainTab:slider{
+    Name = "Silent FOV",
+    Min = 50, Max = 800, Default = 150,
+    Callback = function(v) Settings.FOV = v end
+}
+
+MainTab:dropdown{
+    Name = "Aim Part",
+    StartingText = "Head",
+    Items = {"Head", "HumanoidRootPart"},
+    Callback = function(v) Settings.AimPart = v end
+}
+
+MainTab:toggle{
+    Name = "Wall Check",
+    StartingState = true,
+    Callback = function(v) Settings.WallCheck = v end
+}
+
+-- ESP UI đơn giản
+ESPTab:toggle{
+    Name = "Enable ESP",
+    StartingState = false,
+    Callback = function(v) ESP_Config.Enabled = v end
+}
+
+--//======================
+--// Main Loop
+--//======================
+RunService.RenderStepped:Connect(function()
+    if Settings.SilentAim and Settings.ShowFOV then
+        FOVCircle.Visible = true
+        FOVCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+        FOVCircle.Radius = Settings.FOV
+        FOVCircle.Color = Settings.FOVColor
+    else
+        FOVCircle.Visible = false
+    end
+end)
+
+Mercury:notify{ Title = "LT.ModzVN", Text = "Silent Aim & UI Loaded!", Duration = 3 }
